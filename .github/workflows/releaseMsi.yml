@@ -27,7 +27,7 @@ jobs:
           cache: 'gradle'
 
       - name: Build MSI
-        run: ./gradlew :composeApp:packageReleaseMsi -PappVersion=${{ github.event.inputs.version_name }}
+        run: ./gradlew :composeApp:packageReleaseMsi "-PappVersion=${{ github.event.release.tag_name }}"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
