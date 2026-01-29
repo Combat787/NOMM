@@ -56,10 +56,6 @@ kotlin {
     }
 }
 
-val rawVersion = project.findProperty("appVersion")?.toString() ?: "1.0.0"
-
-val cleanVersion = rawVersion.removePrefix("v").removePrefix("V")
-
 compose.desktop {
     application {
         mainClass = "com.combat.nomm.MainKt"
@@ -68,7 +64,7 @@ compose.desktop {
 
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
 
-            packageVersion = cleanVersion
+            packageVersion = "1.0.0"
             packageName = "Nuclear Option Mod Manager"
             vendor = "Combat"
             description = "A Mod Manager For Nuclear Option"
