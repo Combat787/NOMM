@@ -2,11 +2,7 @@ name: Manual MSI Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version_name:
-        description: 'Version Name (e.g., 1.0.5)'
-        required: true
-        default: '1.0.0'
+  
   release:
     types: [published]
     
@@ -35,6 +31,6 @@ jobs:
           tag_name: v${{ github.event.inputs.version_name }}
           name: Release ${{ github.event.inputs.version_name }}
           files: |
-            composeApp/build/compose/binaries/main/msi/*.msi
+            composeApp/build/compose/binaries/main-release/msi/*.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
