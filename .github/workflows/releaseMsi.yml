@@ -2,9 +2,6 @@ name: Manual MSI Release
 
 on:
   workflow_dispatch:
-  
-  release:
-    types: [published]
     
 jobs:
   release:
