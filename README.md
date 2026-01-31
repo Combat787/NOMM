@@ -1,5 +1,6 @@
 A Mod Manager for the Game Nuclear Option
 
+App Icon made by Shumatsu
 
 This is a Kotlin Multiplatform project targeting Desktop (JVM).
 
