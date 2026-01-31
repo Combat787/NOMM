@@ -6,6 +6,7 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,17 +23,24 @@ object NetworkClient {
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 60000
-            connectTimeoutMillis = 60000
-            socketTimeoutMillis = 60000
+            connectTimeoutMillis = 30000
+            socketTimeoutMillis = 30000
+        }
+        install(UserAgent) {
+            agent = "NOMM-Updater/1.0"
         }
     }
-    
-    suspend fun fetchManifest(url: String): Manifest? = withContext(Dispatchers.IO) {
-        try {
-            val body = client.get(url).body<Manifest>()
-            body
-        } catch (e: Exception) {
-            println(e)
+
+    suspend fun fetchManifest(url: String): List<Extension>? = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = client.get(url)
+            if (response.status.isSuccess()) {
+                response.body<List<Extension>>()
+            } else {
+                null
+            }
+        }.getOrElse { e ->
+            e.printStackTrace()
             null
         }
     }

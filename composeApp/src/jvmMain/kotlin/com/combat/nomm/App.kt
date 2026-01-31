@@ -10,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
@@ -24,25 +23,18 @@ const val appName = "Nuclear Option Mod Manager"
 fun App() {
     val backStack = rememberNavBackStack(MainNavigation.config, MainNavigation.Search)
     val currentKey = backStack.lastOrNull() ?: MainNavigation.Search
-    val currentConfig by SettingsManager.config
-    NommTheme(
-        currentConfig.themeColor, when (currentConfig.theme) {
-            Theme.DARK -> true
-            Theme.LIGHT -> false
-            Theme.SYSTEM -> isSystemInDarkTheme()
-        }, currentConfig.paletteStyle,
-        currentConfig.contrast
-    ) {
+
         Surface(
             color = MaterialTheme.colorScheme.background
         ) {
             Box {
                 Row(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
 
                     ) {
                     MainNavigationRail(currentKey, backStack)
-                    VerticalDivider(modifier = Modifier.width(16.dp).fillMaxHeight().padding(vertical = 32.dp))
+                    VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 32.dp))
                     NavDisplay(
                         modifier = Modifier.fillMaxHeight().weight(1f),
                         backStack = backStack,
@@ -59,12 +51,20 @@ fun App() {
                         entryProvider = entryProvider {
                             entry<MainNavigation.Search> {
                                 SearchScreen(
-                                    onNavigateToMod = { mod -> backStack.add(MainNavigation.Mod(mod)) }
+                                    onNavigateToMod = { modId ->
+                                        if (RepoMods.mods.value.any { it.id == modId }) {
+                                            backStack.add(MainNavigation.Mod(modId))
+                                        }
+                                    }
                                 )
                             }
                             entry<MainNavigation.Libraries> {
                                 LibraryScreen(
-                                    onNavigateToMod = { mod -> backStack.add(MainNavigation.Mod(mod)) }
+                                    onNavigateToMod = { modId ->
+                                        if (RepoMods.mods.value.any { it.id == modId }) {
+                                            backStack.add(MainNavigation.Mod(modId))
+                                        }
+                                    }
                                 )
                             }
                             entry<MainNavigation.Settings> {
@@ -72,9 +72,14 @@ fun App() {
                             }
                             entry<MainNavigation.Mod> { nav ->
                                 ModDetailScreen(
-                                    nav.modName,
-                                    { backStack.add(MainNavigation.Mod(it)) },
-                                    { backStack.removeLastOrNull() })
+                                    modId = nav.modName,
+                                    onOpenMod = { targetId ->
+                                        if (RepoMods.mods.value.any { it.id == targetId }) {
+                                            backStack.add(MainNavigation.Mod(targetId))
+                                        }
+                                    },
+                                    onBack = { backStack.removeLastOrNull() }
+                                )
                             }
                         })
 
@@ -82,5 +87,5 @@ fun App() {
             }
         }
     }
-}
+
 

@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -31,64 +30,75 @@ object RepoMods {
         fetchManifest()
     }
 
-    fun fetchManifest(fake: Boolean = false) {
+    fun fetchManifest() {
         scope.launch {
-            mutex.withLock {
+            if (!mutex.tryLock()) return@launch
+            try {
                 isLoading.value = true
-                try {
-                    val url = "https://kopterbuzz.github.io/NOModManifestTesting/manifest/manifest.json"
-                    val fetched = if (fake) fetchFakeManifest() else NetworkClient.fetchManifest(url)
-                    if (fetched != null) {
-                        mods.value = fetched
-                    }
-                } finally {
-                    isLoading.value = false
+                val fetched = if (SettingsManager.config.value.fakeManifest) {
+                    fetchFakeManifest()
+                } else {
+                    NetworkClient.fetchManifest(SettingsManager.config.value.manifestUrl)
                 }
+                if (fetched != null) mods.value = fetched
+            } finally {
+                isLoading.value = false
+                mutex.unlock()
+            }
+        }
+    }
+
+    fun downloadBepInEx() {
+        val url = "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.4/BepInEx_win_x64_5.4.23.4.zip"
+        SettingsManager.gameFolder?.let {
+            Installer.installMod("BepInEx", url, it, true) {
+                LocalMods.refresh()
             }
         }
     }
 
     fun installMod(id: String, version: Version?, processing: MutableSet<String> = mutableSetOf()) {
+        val bepinexFolder = File(SettingsManager.gameFolder, "BepInEx")
+        if (!bepinexFolder.exists()) {
+            downloadBepInEx()
+            return
+        }
+
         if (id in processing) return
         processing.add(id)
 
         val extension = mods.value.find { it.id == id } ?: return
-        val artifact = version?.let { v -> extension.artifacts.find { it.version == v } }
+        val targetArtifact = version?.let { v -> extension.artifacts.find { it.version == v } }
             ?: extension.artifacts.maxByOrNull { it.version }
             ?: return
 
-        artifact.dependencies.forEach { dep ->
-            installMod(dep.id, dep.version, processing)
+        val installedMod = LocalMods.mods.value[id]
+        if (installedMod != null && version == null) {
+            val currentVersion = installedMod.artifact?.version
+            if (currentVersion != null && currentVersion == targetArtifact.version) return
         }
-        artifact.extends?.let { dep ->
-            installMod(dep.id, dep.version, processing)
-        }
 
-        val bepinexFolder = File(SettingsManager.gameFolder, "BepInEx")
-        val disabledPluginsFolder = File(bepinexFolder, "disabledPlugins")
-        disabledPluginsFolder.mkdir()
+        targetArtifact.dependencies.forEach { installMod(it.id, it.version, processing) }
+        targetArtifact.extends?.let { installMod(it.id, it.version, processing) }
 
-        val dir = File(disabledPluginsFolder, id)
-        dir.mkdir()
+        val disabledFolder = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
+        val dir = File(disabledFolder, id)
 
-        Installer.installMod(
-            extension.id,
-            artifact.downloadUrl,
-            dir,
-        ) {
-            val meta = File(dir, "meta.json")
-            meta.createNewFile()
-            meta.writeText(
-                json.encodeToString(
-                    ModMeta(
-                        extension.id,
-                        artifact,
-                        extension,
-                    )
-                )
+        if (dir.exists()) dir.deleteRecursively()
+        if (!dir.mkdirs()) return
+        
+        Installer.installMod(extension.id, targetArtifact.downloadUrl, dir) {
+            val metaData = ModMeta(
+                id = extension.id,
+                artifact = targetArtifact,
+                cachedExtension = extension,
             )
-            LocalMods.refresh()
-            LocalMods.mods.value[extension.id]?.enable()
+
+            runCatching {
+                File(dir, "meta.json").writeText(json.encodeToString(metaData))
+                LocalMods.refresh()
+                LocalMods.mods.value[extension.id]?.enable()
+            }
         }
     }
 }

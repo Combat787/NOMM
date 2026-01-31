@@ -34,7 +34,7 @@ data class Artifact(
 @Serializable
 data class PackageReference(
     val id: String,
-    val version: Version
+    val version: Version?
 ) {
 }
 

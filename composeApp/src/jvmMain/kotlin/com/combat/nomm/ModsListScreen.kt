@@ -1,5 +1,6 @@
 package com.combat.nomm
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -64,7 +65,7 @@ fun SearchScreen(
     ) {
         stickyHeader {
             Row(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp).height(IntrinsicSize.Min),
+                modifier = Modifier.padding(top = 16.dp).height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -99,15 +100,17 @@ fun SearchScreen(
                     Text(
                         "Nothing here. huh",
                         modifier = Modifier.padding(horizontal = 16.dp),
-                        style = MaterialTheme.typography.labelLarge
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         } else {
             items(filteredMods, key = { it.id }) { mod ->
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                
                     ModItem(mod = mod, onClick = { onNavigateToMod(mod.id) })
-                }
+                
             }
         }
     }
@@ -123,7 +126,7 @@ fun SearchBar(
         value = query,
         onValueChange = onQueryChange,
         modifier = modifier,
-        placeholder = { Text("Search mods...", style = MaterialTheme.typography.bodyMedium) },
+        placeholder = { Text("Search mods...", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(painterResource(Res.drawable.search_24px), null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
@@ -148,10 +151,11 @@ fun SearchBar(
 fun ModItem(mod: Extension, onClick: () -> Unit) {
     val installStatuses by Installer.installStatuses.collectAsState()
     val installedMods by LocalMods.mods.collectAsState()
-
+    
     val taskState = installStatuses[mod.id]
     val modMeta = installedMods[mod.id]
 
+    
     Card(
         modifier = Modifier,
         shape = MaterialTheme.shapes.small,
@@ -168,10 +172,14 @@ fun ModItem(mod: Extension, onClick: () -> Unit) {
                         append(mod.displayName)
                     }
                     withStyle(MaterialTheme.typography.labelSmall.toSpanStyle()) {
-                        append(" by ")
-                        append(mod.authors.joinToString(", "))
+                        if (mod.authors.isNotEmpty()) {
+                            append(" by ")
+                            append(mod.authors.joinToString(", "))
+                        }
                     }
-                })
+                },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,)
                 Text(
                     mod.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -183,38 +191,58 @@ fun ModItem(mod: Extension, onClick: () -> Unit) {
 
             when {
                 taskState != null -> {
-                    Button(
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = taskState.progress ?: 0f,
+                        label = "progress"
+                    )
+
+                    FilledTonalIconButton(
                         onClick = { if (taskState.phase == TaskState.Phase.DOWNLOADING) taskState.cancel() },
                         modifier = Modifier.size(40.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        colors = ButtonDefaults.buttonColors(
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = MaterialTheme.colorScheme.primary
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(
-                                progress = { taskState.progress ?: 0f },
+                                progress = { animatedProgress },
                                 modifier = Modifier.fillMaxSize(),
-                                strokeWidth = 3.dp,
-                                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                             )
                             if (taskState.phase == TaskState.Phase.DOWNLOADING) {
-                                Icon(painterResource(Res.drawable.close_24px), null, modifier = Modifier.size(16.dp))
+                                Icon(
+                                    painterResource(Res.drawable.close_24px),
+                                    contentDescription = "Cancel",
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
                     }
                 }
+
                 modMeta != null -> {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        IconButton(onClick = { modMeta.update() }, modifier = Modifier.size(32.dp)) {
-                            Icon(painterResource(Res.drawable.refresh_24px), null, modifier = Modifier.size(20.dp))
+                        if (modMeta.hasUpdate) {
+                            IconButton(
+                                onClick = { modMeta.update() },
+                                modifier = Modifier.size(32.dp),
+                                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ) {
+                                Icon(painterResource(Res.drawable.refresh_24px), null, modifier = Modifier.size(20.dp))
+                            }
                         }
 
-                        IconButton(onClick = { modMeta.uninstall() }, modifier = Modifier.size(32.dp)) {
+                        IconButton(
+                            onClick = { modMeta.uninstall() },
+                            modifier = Modifier.size(32.dp),
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
                             Icon(painterResource(Res.drawable.delete_24px), null, modifier = Modifier.size(20.dp))
                         }
 
@@ -223,20 +251,31 @@ fun ModItem(mod: Extension, onClick: () -> Unit) {
                             onCheckedChange = { isEnabled ->
                                 if (isEnabled) modMeta.enable() else modMeta.disable()
                             },
-                            modifier = Modifier.scale(0.8f)
+                            modifier = Modifier.scale(0.7f)
                         )
                     }
                 }
+
                 else -> {
                     Button(
-                        onClick = { RepoMods.installMod(mod.id, mod.artifacts.maxBy { it.version }.version) },
+                        onClick = {
+                            mod.artifacts.maxByOrNull { it.version }?.let {
+                                RepoMods.installMod(mod.id, it.version)
+                            }
+                        },
                         modifier = Modifier.size(40.dp),
-                        contentPadding = PaddingValues(8.dp)
+                        contentPadding = PaddingValues(8.dp),
+                        shape = MaterialTheme.shapes.medium
                     ) {
-                        Icon(painterResource(Res.drawable.download_24px), null, modifier = Modifier.fillMaxSize())
+                        Icon(
+                            painterResource(Res.drawable.download_24px),
+                            contentDescription = "Install",
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
             }
+            
         }
     }
 }

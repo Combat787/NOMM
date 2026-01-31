@@ -6,16 +6,27 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-
+import nuclearoptionmodmanager.composeapp.generated.resources.Res
+import nuclearoptionmodmanager.composeapp.generated.resources.file_export_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.file_open_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.folder_open_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.more_vert_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
+import org.jetbrains.compose.resources.painterResource
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
@@ -23,6 +34,8 @@ fun LibraryScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val localMods by LocalMods.mods.collectAsState()
+
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val installedExtensions = remember(localMods) {
         localMods.values.map {
@@ -58,23 +71,79 @@ fun LibraryScreen(
     ) {
         stickyHeader {
             Row(
-                modifier = Modifier
-                    .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-                    .height(IntrinsicSize.Min),
+                modifier = Modifier.padding(top = 16.dp).height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .border(
+                    query = searchQuery, onQueryChange = { searchQuery = it }, modifier = Modifier.weight(1f).border(
+                        width = Dp.Hairline,
+                        color = MaterialTheme.colorScheme.outline,
+                        shape = MaterialTheme.shapes.small
+                    )
+                )
+
+                Button(
+                    onClick = { LocalMods.refresh() },
+                    modifier = Modifier.fillMaxHeight().border(
+                        width = Dp.Hairline,
+                        color = MaterialTheme.colorScheme.outline,
+                        shape = MaterialTheme.shapes.small
+                    ),
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Icon(
+                        painterResource(Res.drawable.refresh_24px),
+                        null,
+                    )
+                }
+
+                Box {
+                    Button(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.fillMaxHeight().border(
                             width = Dp.Hairline,
                             color = MaterialTheme.colorScheme.outline,
                             shape = MaterialTheme.shapes.small
+                        ),
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Icon(
+                            painterResource(Res.drawable.more_vert_24px),
+                            contentDescription = "Options"
                         )
-                )
+                    }
+
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Export Modpack") },
+                            onClick = {
+                                menuExpanded = false
+                                LocalMods.exportMods() 
+                            },
+                            leadingIcon = { Icon(painterResource(Res.drawable.file_export_24px), null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Import Modpack") },
+                            onClick = {
+                                menuExpanded = false
+                                LocalMods.importMods()
+                            },
+                            leadingIcon = { Icon(painterResource(Res.drawable.file_open_24px), null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add from file") },
+                            onClick = {
+                                menuExpanded = false
+                                LocalMods.addFromFile()
+                            },
+                            leadingIcon = { Icon(painterResource(Res.drawable.folder_open_24px), null) }
+                        )
+                    }
+                }
             }
         }
 
@@ -84,15 +153,15 @@ fun LibraryScreen(
                     Text(
                         "Nothing here. huh",
                         modifier = Modifier.padding(horizontal = 16.dp),
-                        style = MaterialTheme.typography.labelLarge
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         } else {
             items(filteredMods, key = { it.id }) { ext ->
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    ModItem(mod = ext, onClick = { onNavigateToMod(ext.id) })
-                }
+                ModItem(mod = ext, onClick = { onNavigateToMod(ext.id) })
             }
         }
     }

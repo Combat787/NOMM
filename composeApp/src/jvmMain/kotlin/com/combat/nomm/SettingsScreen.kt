@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -24,6 +26,7 @@ import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -38,31 +41,44 @@ fun SettingsScreen() {
         val scope = rememberCoroutineScope()
         SettingsGroup(title = "Path Configuration") {
             ClickableSettingsRow(
-                label = "Game Folder",
-                subLabel = currentConfig.gamePath ?: "Not Found",
-                onClick = {
+                label = "Game Folder", subLabel = currentConfig.gamePath ?: "Not Found", onClick = {
                     scope.launch {
                         val directory = FileKit.openDirectoryPicker(
                             title = "Select Nuclear Option Folder"
                         )
                         directory?.file?.path?.let { path ->
                             val exeFile = File(path, "NuclearOption.exe")
-                            if (exeFile.exists())
-                                SettingsManager.updateConfig(
-                                    currentConfig.copy(
-                                        gamePath = path
-                                    )
+                            if (exeFile.exists()) SettingsManager.updateConfig(
+                                currentConfig.copy(
+                                    gamePath = path
                                 )
+                            )
                         }
                     }
                 })
         }
-
+        SettingsGroup(title = "Manifest") {
+            SettingsTextFieldRow(
+                label = "Manifest Source URL",
+                value = currentConfig.manifestUrl,
+                onValueChange = {
+                    SettingsManager.updateConfig(currentConfig.copy(manifestUrl = it))
+                    RepoMods.fetchManifest()
+                },
+                placeholder = "",
+            )
+            SettingsSwitchRow(
+                label = "Fake Manifest",
+                subLabel = "Generates Fake Manifest Data useful to test the UI better.",
+                checked = currentConfig.fakeManifest,
+                onCheckedChange = { newValue ->
+                    SettingsManager.updateConfig(currentConfig.copy(fakeManifest = newValue))
+                    RepoMods.fetchManifest()
+                })
+        }
         SettingsGroup(title = "Appearance") {
             SettingsColorPicker(
-                label = "Theme Accent",
-                selectedColor = currentConfig.themeColor,
-                onColorSelected = { newColor ->
+                label = "Theme Accent", selectedColor = currentConfig.themeColor, onColorSelected = { newColor ->
                     SettingsManager.updateConfig(currentConfig.copy(themeColor = newColor))
                 })
             SettingsDropdownRow(
@@ -269,13 +285,105 @@ fun SettingsColorPicker(
             val percent = (h / 360f).coerceIn(0f, 1f)
 
             Box(
-                Modifier.offset(x = (percent * width) - 3.dp).requiredHeight(44.dp).width(6.dp)
-                    .clip(CircleShape).background(
+                Modifier.offset(x = (percent * width) - 3.dp).requiredHeight(44.dp).width(6.dp).clip(CircleShape)
+                    .background(
                         MaterialTheme.colorScheme.background
                     ).border(Dp.Hairline, MaterialTheme.colorScheme.outline)
             )
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+fun SettingsSwitchRow(
+    label: String,
+    subLabel: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+
+    Box {
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { onCheckedChange(!checked) },
+            color = Color.Transparent
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        subLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = checked, onCheckedChange = null
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsTextFieldRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "",
+) {
+    var localText by remember(value) { mutableStateOf(value) }
+
+    LaunchedEffect(localText) {
+        if (localText != value) {
+            delay(500)
+            onValueChange(localText)
+        }
+    }
+
+
+    Box {
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.Transparent
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
+
+                    BasicTextField(
+                        value = localText,
+                        onValueChange = { localText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        decorationBox = { innerTextField ->
+                            if (localText.isEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+                }
+            }
+        }
     }
 }

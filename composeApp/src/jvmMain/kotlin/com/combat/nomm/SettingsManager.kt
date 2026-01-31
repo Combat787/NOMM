@@ -25,6 +25,8 @@ data class Configuration(
     val gamePath: String? = "",
     val paletteStyle: PaletteStyle = PaletteStyle.Expressive,
     val contrast: Contrast = Contrast.Default,
+    val fakeManifest: Boolean = false,
+    val manifestUrl: String = "https://kopterbuzz.github.io/NOModManifestTesting/manifest/manifest.json",
     @Serializable(with = ColorSerializer::class) val themeColor: Color = Color.Green,
 )
 
@@ -41,7 +43,7 @@ object SettingsManager {
         return if (DataStorage.configFile.exists() && DataStorage.configFile.length() > 0) {
             try {
                 DataStorage.json.decodeFromString<Configuration>(DataStorage.configFile.readText())
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 createDefaultConfig()
             }
         } else {
