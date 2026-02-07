@@ -1,17 +1,20 @@
+# NOMM - Nuclear Option Mod Manager
+
 A Mod Manager for the Game Nuclear Option
 
 Features:
 - Automatic BepInEx installation
 - Mod searching
-- Mod installing
+- Mod installing and updating
+- Mod conflict warnings
+- Mod automatic dependency resolution
 - Adding Mods from Files
 - Mod toggling
 - Mod Uninstalling
 - Customizable Theme
 
 
-Warning:
-The Manifest this Manager uses to find out where mods are is still in development and doesn't have a lot of mods added yet and not all of them support the new mod structure required some entries in the manifest are completely broken and don't work at all accidentally installing a broken mod should not result in any errors and doesn't install the mod. Expect the Manifest to be extended in the near future.
+To work NOMM retrieves a manifest from [NOMNOM](https://kopterbuzz.github.io/NOModManifestTesting) to get the list of mods. To add your own mods go there.
 
 App Icon made by Shumatsu
 
