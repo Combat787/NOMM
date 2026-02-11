@@ -53,7 +53,7 @@ object RepoMods {
 
     fun downloadBepInEx() {
         val url = "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.4/BepInEx_win_x64_5.4.23.4.zip"
-        SettingsManager.gameFolder ?: return
+        val gameFolder = SettingsManager.gameFolder ?: return
         if (LocalMods.isBepInExInstalled.value) {
             return
         }
@@ -63,8 +63,8 @@ object RepoMods {
             }) {
             launchOptionDialog.update { true }
         }
-        
-        val configDir = File(SettingsManager.gameFolder, "BepInEx/config")
+
+        val configDir = File(gameFolder, "BepInEx/config")
         configDir.mkdirs()
         val config = File(configDir, "BepInEx.cfg")
         config.createNewFile()
@@ -72,14 +72,14 @@ object RepoMods {
             [Chainloader]
             HideManagerGameObject = true
             """.trimIndent())
-        Installer.installMod("BepInEx", url, SettingsManager.gameFolder, true) {
+        Installer.installMod("BepInEx", url, gameFolder, true) {
             LocalMods.refresh()
         }
     }
 
     fun installMod(id: String, version: Version?, processing: MutableSet<String> = mutableSetOf()) {
-        val bepinexFolder = File(SettingsManager.gameFolder, "BepInEx")
-        if (!bepinexFolder.exists()) {
+        val bepinexFolder = SettingsManager.bepInExFolder
+        if (bepinexFolder == null || !bepinexFolder.exists()) {
             downloadBepInEx()
             return
         }
@@ -92,7 +92,6 @@ object RepoMods {
             ?: extension.artifacts.maxByOrNull { it.version }
             ?: return
 
-        
         val installedMod = LocalMods.mods.value[id]
         if (installedMod != null) {
             val currentVersion = installedMod.artifact?.version
@@ -103,7 +102,7 @@ object RepoMods {
         targetArtifact.extends?.let { installMod(it.id, null, processing) }
 
         installedMod?.disable()
-        
+
         val disabledFolder = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
         val dir = File(disabledFolder, id)
 

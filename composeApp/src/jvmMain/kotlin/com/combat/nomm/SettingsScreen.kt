@@ -56,7 +56,7 @@ fun SettingsScreen() {
                 )
                 SettingsInfoRow(
                     infoName = "Version",
-                    infoData = "2.3.0"
+                    infoData = "2.4.0"
                 )
                 ClickableSettingsRow(
                     "GitHub",

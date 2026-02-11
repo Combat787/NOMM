@@ -69,7 +69,7 @@ compose.desktop {
 
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
 
-            packageVersion = "2.3.0"
+            packageVersion = "2.4.0"
             packageName = "Nuclear Option Mod Manager"
             vendor = "Combat"
             description = "A Mod Manager For Nuclear Option"

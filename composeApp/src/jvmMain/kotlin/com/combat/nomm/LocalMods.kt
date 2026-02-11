@@ -277,6 +277,14 @@ data class ModMeta(
         val currentFile = currentSelf.file ?: return false
         if (currentSelf.enabled == true && currentFile.exists()) return true
 
+        artifact?.extends?.id?.let { parentId ->
+            val parentMod = LocalMods.mods.value[parentId] ?: return false
+            if (parentMod.enabled != true) {
+                val success = parentMod.enable()
+                if (!success) return false
+            }
+        }
+
         val parentId = artifact?.extends?.id
         val targetDir = if (parentId != null) {
             val parentMod = LocalMods.mods.value[parentId] ?: return false
@@ -296,6 +304,12 @@ data class ModMeta(
         val currentSelf = LocalMods.mods.value[id] ?: this
         val currentFile = currentSelf.file ?: return
         if (currentSelf.enabled == false || !currentFile.exists()) return
+
+        LocalMods.mods.value.values.forEach { other ->
+            if (other.artifact?.extends?.id == id && other.enabled == true) {
+                other.disable()
+            }
+        }
 
         val destination = File(SettingsManager.bepInExFolder, "disabledPlugins/${currentFile.name}")
         if (currentFile.moveTo(destination)) {
