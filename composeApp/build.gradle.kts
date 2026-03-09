@@ -1,6 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
+    
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
@@ -9,7 +10,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(JvmVendorSpec.JETBRAINS)
+    }
+}
 
 kotlin {
     jvm()
@@ -36,7 +42,7 @@ kotlin {
             implementation(libs.filekit.core)
             implementation(libs.filekit.dialogs)
             implementation(libs.filekit.dialogs.compose)
-
+            implementation("org.jetbrains.runtime:jbr-api:1.10.1")
 
             implementation(libs.compose.colorpicker)
             implementation(libs.materialKolor)
@@ -64,12 +70,13 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.combat.nomm.MainKt"
-
+        
+        
         nativeDistributions {
 
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
 
-            packageVersion = "2.4.0"
+            packageVersion = "3.0.0"
             packageName = "Nuclear Option Mod Manager"
             vendor = "Combat"
             description = "A Mod Manager For Nuclear Option"

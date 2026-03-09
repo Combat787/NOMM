@@ -94,7 +94,7 @@ fun MainNavigationRail(
                         } else {
                             CircularProgressIndicator(
                                 progress = { bepinexState!!.progress ?: 1f },
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.size(36.dp),
                                 strokeWidth = 4.dp,
                             )
                         }
@@ -115,18 +115,7 @@ fun MainNavigationRail(
                 FloatingActionButton(
                     onClick = {
                         state.isMinimized = true
-                        val exeFile = File(SettingsManager.gameFolder, "NuclearOption.exe")
-                        if (exeFile.exists()) {
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    ProcessBuilder(exeFile.absolutePath)
-                                        .directory(exeFile.parentFile)
-                                        .start()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
-                        }
+                        launchNuclearOption()
 
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -141,6 +130,21 @@ fun MainNavigationRail(
                 }
             }
 
+        }
+    }
+}
+
+fun launchNuclearOption() {
+    val exeFile = File(SettingsManager.gameFolder, "NuclearOption.exe")
+    if (exeFile.exists()) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                ProcessBuilder(exeFile.absolutePath)
+                    .directory(exeFile.parentFile)
+                    .start()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

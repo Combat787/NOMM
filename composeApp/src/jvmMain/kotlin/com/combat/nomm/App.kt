@@ -6,15 +6,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -28,7 +21,6 @@ import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.awt.datatransfer.StringSelection
 
@@ -45,7 +37,7 @@ fun App() {
         
     
         Surface(
-            color = MaterialTheme.colorScheme.background
+            color = MaterialTheme.colorScheme.background 
         ) {
             Box {
                 Row(
@@ -54,7 +46,7 @@ fun App() {
 
                     ) {
                     MainNavigationRail(currentKey, backStack)
-                    VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 32.dp))
+                    VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 16.dp))
                     NavDisplay(
                         modifier = Modifier.fillMaxHeight().weight(1f),
                         backStack = backStack,

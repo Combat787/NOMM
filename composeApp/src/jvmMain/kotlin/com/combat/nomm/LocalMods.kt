@@ -58,6 +58,16 @@ object LocalMods {
         }
     }
 
+    fun addFilesToPlugins(files: List<File>) {
+        val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
+        if (!pluginsDir.exists()) pluginsDir.mkdirs()
+        files.forEach { file ->
+            val destinationFile = File(pluginsDir, file.name)
+            file.moveTo(destinationFile)
+        }
+        refresh()
+    }
+
     fun addFromFile() {
         scope.launch {
             val files = FileKit.openFilePicker(
@@ -66,15 +76,7 @@ object LocalMods {
             )
 
             if (!files.isNullOrEmpty()) {
-                val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
-                if (!pluginsDir.exists()) pluginsDir.mkdirs()
-                files.forEach { platformFile ->
-
-                    val destinationFile = File(pluginsDir, platformFile.file.name)
-
-                    platformFile.file.moveTo(destinationFile)
-                }
-                refresh()
+                addFilesToPlugins(files.map { it.file })
             }
         }
     }

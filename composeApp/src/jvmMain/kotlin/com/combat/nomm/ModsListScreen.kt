@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.log10
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -40,6 +41,14 @@ fun SearchScreen(
     val filteredMods = rememberFilteredExtensions(allMods, searchQuery)
 
     val state = rememberLazyListState()
+
+    val isScrollable by remember {
+        derivedStateOf {
+            state.layoutInfo.visibleItemsInfo.size < state.layoutInfo.totalItemsCount ||
+                state.firstVisibleItemScrollOffset > 0
+        }
+    }
+
     Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -92,22 +101,23 @@ fun SearchScreen(
                 }
             }
         }
-
-        VerticalScrollbar(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(8.dp)
-                .padding(vertical = 16.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            adapter = rememberScrollbarAdapter(state),
-            style = defaultScrollbarStyle().copy(
-                unhoverColor = MaterialTheme.colorScheme.outline,
-                hoverColor = MaterialTheme.colorScheme.primary,
-                thickness = 8.dp,
-                shape = CircleShape
+        if (isScrollable) {
+            VerticalScrollbar(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(8.dp)
+                    .padding(vertical = 16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                adapter = rememberScrollbarAdapter(state),
+                style = defaultScrollbarStyle().copy(
+                    unhoverColor = MaterialTheme.colorScheme.outline,
+                    hoverColor = MaterialTheme.colorScheme.primary,
+                    thickness = 8.dp,
+                    shape = CircleShape
+                )
             )
-        )
+        }
     }
 }
 
@@ -118,7 +128,7 @@ fun rememberFilteredExtensions(allMods: List<Extension>, searchQuery: String): L
 
     LaunchedEffect(searchQuery, allMods) {
         if (!isInitialLoad && searchQuery.isNotEmpty()) {
-            delay(250)
+            delay(250.milliseconds)
         }
 
         val results = withContext(Dispatchers.Default) {
@@ -226,11 +236,14 @@ fun ModItem(mod: Extension, onClick: () -> Unit) {
                 Text(
                     text = buildAnnotatedString {
                         withStyle(
-                            MaterialTheme.typography.titleMedium.toSpanStyle().copy(color = MaterialTheme.colorScheme.onSurface,fontWeight = FontWeight.Black)
+                            MaterialTheme.typography.titleMedium.toSpanStyle()
+                                .copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Black)
                         ) {
                             append(mod.displayName)
                         }
-                        withStyle(MaterialTheme.typography.labelMedium.toSpanStyle().copy(fontWeight = FontWeight.Bold)) {
+                        withStyle(
+                            MaterialTheme.typography.labelMedium.toSpanStyle().copy(fontWeight = FontWeight.Bold)
+                        ) {
                             if (mod.authors.isNotEmpty()) {
                                 append(" by ")
                                 append(mod.authors.joinToString(", "))

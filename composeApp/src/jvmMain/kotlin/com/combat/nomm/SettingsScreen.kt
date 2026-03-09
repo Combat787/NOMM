@@ -26,11 +26,16 @@ import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.awt.Desktop
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
+private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 @Composable
 fun SettingsScreen() {
@@ -56,13 +61,15 @@ fun SettingsScreen() {
                 )
                 SettingsInfoRow(
                     infoName = "Version",
-                    infoData = "2.4.0"
+                    infoData = "3.0.0"
                 )
                 ClickableSettingsRow(
                     "GitHub",
                     "github.com/Combat787/NOMM",
                     onClick = {
-                        uriHandler.openUri("https://github.com/Combat787/NOMM")
+                        scope.launch {
+                            uriHandler.openUri("https://github.com/Combat787/NOMM")
+                        }
                     }
                 )
             }
@@ -140,14 +147,18 @@ fun SettingsScreen() {
                     label = "Open Nuclear Option Folder",
                     subLabel = "Click to open the Folder containing the Logs, Missions and Blocklist.",
                     onClick = {
-                        Desktop.getDesktop().open(getNuclearOptionFolder())
+                        scope.launch {
+                            Desktop.getDesktop().open(getNuclearOptionFolder())
+                        }
                     })
                 ClickableSettingsRow(
                     label = "Open Nuclear Option Game Folder",
                     subLabel = "Click to open the Folder containing the Game Files and BepInEx.",
                     onClick = {
-                        SettingsManager.config.value.gamePath?.let {
-                            Desktop.getDesktop().open(File(it))
+                        scope.launch {
+                            SettingsManager.config.value.gamePath?.let {
+                                Desktop.getDesktop().open(File(it))
+                            }
                         }
                     })
             }
@@ -409,7 +420,7 @@ fun SettingsTextFieldRow(
 
     LaunchedEffect(localText) {
         if (localText != value) {
-            delay(500)
+            delay(500.milliseconds)
             onValueChange(localText)
         }
     }

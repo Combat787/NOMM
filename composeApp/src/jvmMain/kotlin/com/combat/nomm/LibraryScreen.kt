@@ -47,7 +47,14 @@ fun LibraryScreen(
 
     val filteredMods = rememberFilteredExtensions(installedExtensions, searchQuery)
 
-    val state = rememberLazyListState()
+    val state = rememberLazyListState() 
+    
+    val isScrollable by remember {
+        derivedStateOf {
+            state.layoutInfo.visibleItemsInfo.size < state.layoutInfo.totalItemsCount ||
+                state.firstVisibleItemScrollOffset > 0
+        }
+    }
     Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -146,21 +153,22 @@ fun LibraryScreen(
                 }
             }
         }
-
-        VerticalScrollbar(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(8.dp)
-                .padding(vertical = 16.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            adapter = rememberScrollbarAdapter(state),
-            style = defaultScrollbarStyle().copy(
-                unhoverColor = MaterialTheme.colorScheme.outline,
-                hoverColor = MaterialTheme.colorScheme.primary,
-                thickness = 8.dp,
-                shape = CircleShape
+        if (isScrollable) {
+            VerticalScrollbar(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(8.dp)
+                    .padding(vertical = 16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                adapter = rememberScrollbarAdapter(state),
+                style = defaultScrollbarStyle().copy(
+                    unhoverColor = MaterialTheme.colorScheme.outline,
+                    hoverColor = MaterialTheme.colorScheme.primary,
+                    thickness = 8.dp,
+                    shape = CircleShape
+                )
             )
-        )
+        }
     }
 }

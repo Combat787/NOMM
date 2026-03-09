@@ -16,6 +16,7 @@ import com.materialkolor.Contrast
 import com.materialkolor.DynamicMaterialTheme
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
+import com.materialkolor.scheme.DynamicScheme
 import nuclearoptionmodmanager.composeapp.generated.resources.JetBrainsMono
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import org.jetbrains.compose.resources.Font
