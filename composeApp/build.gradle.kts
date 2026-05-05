@@ -82,6 +82,7 @@ nucleus.application {
     mainClass = "com.combat.nomm.MainKt"
     jvmArgs += "--enable-native-access=ALL-UNNAMED"
     
+    val authorEmail = "787combat787@gmail.com"
     nativeDistributions {
         targetFormats(
             TargetFormat.Portable,
@@ -106,8 +107,7 @@ nucleus.application {
         
         homepage = "https://github.com/Combat787/NOMM"
         
-        artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
-        compressionLevel = CompressionLevel.Maximum
+        compressionLevel = CompressionLevel.Normal
 
         windows {
             upgradeUuid = "fdac94b6-2774-4802-96c4-67ada2e62a57"
@@ -126,6 +126,7 @@ nucleus.application {
             shortcut = true
             packageName = "Nuclear Option Mod Manager"
             appCategory = "Utility"
+            debMaintainer = "Combat <${authorEmail}>"
         }
         
         macOS {

@@ -29,13 +29,16 @@ jobs:
       - name: Setup Nucleus Environment
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
 
+
+
       - name: Install Linux Packaging Tools
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm flatpak-builder
-
-      # --- ADDED THIS STEP HERE ---
+          sudo apt-get install -y rpm flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          
+          
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
