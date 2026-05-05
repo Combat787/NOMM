@@ -1,0 +1,85 @@
+name: Build and Release (Windows & Linux)
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }} Formats
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Removed macos-latest
+        include:
+          - os: windows-latest
+          - os: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Nucleus setup ensures JBR and basic packaging tools are ready
+      - name: Setup Nucleus Environment
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
+
+      # Additional dependencies for Linux formats like Snap/Flatpak/RPM if needed
+      - name: Install Linux Packaging Tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm flatpak-builder
+
+      # This command triggers all targetFormats defined in your build.gradle.kts
+      # for the specific OS the runner is currently on.
+      - name: Build All Formats
+        run: ./gradlew packageReleaseDistributionForCurrentOS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload everything found in the release folder
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.os }}
+          path: build/compose/binaries/main/release/
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build-artifacts
+          merge-multiple: true
+
+      # Generates the update.yml for Nucleus auto-updater
+      - name: Generate Auto-Update Metadata
+        uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
+        with:
+          artifacts-path: build-artifacts
+
+      # Final step: Uploads all formats to your GitHub Release
+      - name: Publish Release
+        uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          artifacts-path: build-artifacts
+          release-tag: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
