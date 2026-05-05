@@ -85,8 +85,8 @@ nucleus.application {
     nativeDistributions {
         targetFormats(
             TargetFormat.Portable,
-            TargetFormat.Nsis,
             TargetFormat.AppImage,
+            TargetFormat.Msi,
             TargetFormat.Dmg,
             TargetFormat.Rpm,
             TargetFormat.Deb,

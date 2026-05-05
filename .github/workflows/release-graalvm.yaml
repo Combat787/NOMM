@@ -1,0 +1,292 @@
+name: Release GraalVM Native Image (Jewel Sample)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-graalvm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-natives:
+    uses: ./.github/workflows/build-natives.yaml
+
+  build:
+    needs: build-natives
+    name: GraalVM - ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            arch: amd64
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            arch: arm64
+          - name: macOS ARM64
+            os: macos-latest
+            arch: arm64
+          - name: macOS Intel
+            os: macos-15-intel
+            arch: amd64
+          - name: Windows x64
+            os: windows-latest
+            arch: amd64
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download darkmode-detector native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: darkmode-detector/src/main/resources/nucleus/native/
+          pattern: '*-natives*'
+          merge-multiple: true
+
+      - name: Download native-ssl artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-ssl/src/main/resources/nucleus/native/
+          pattern: 'ssl-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-jbr artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-jbr/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-jbr-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-jni artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-jni/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-jni-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-core artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-core/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-core-*'
+          merge-multiple: true
+
+      - name: Download linux-hidpi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: linux-hidpi/src/main/resources/nucleus/native/
+          pattern: 'linux-hidpi-*'
+          merge-multiple: true
+
+      - name: Download system-color artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: system-color/src/main/resources/nucleus/native/
+          pattern: 'system-color-*'
+          merge-multiple: true
+
+      - name: Download energy-manager artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: energy-manager/src/main/resources/nucleus/native/
+          pattern: 'energy-manager-*'
+          merge-multiple: true
+
+      - name: Download taskbar-progress artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: taskbar-progress/src/main/resources/nucleus/native/
+          pattern: 'taskbar-progress-*'
+          merge-multiple: true
+
+      - name: Download notification-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-macos/src/main/resources/nucleus/native/
+          pattern: 'notification-macos*'
+          merge-multiple: true
+
+      - name: Download service-management-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: service-management-macos/src/main/resources/nucleus/native/
+          pattern: 'service-management-macos*'
+          merge-multiple: true
+
+      - name: Download notification-linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-linux/src/main/resources/nucleus/native/
+          pattern: 'notification-linux-*'
+          merge-multiple: true
+
+      - name: Download notification-windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-windows/src/main/resources/nucleus/native/
+          pattern: 'notification-windows*'
+          merge-multiple: true
+
+      - name: Download autolaunch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: autolaunch/src/main/resources/nucleus/native/
+          pattern: 'autolaunch*'
+          merge-multiple: true
+
+      - name: Download launcher-windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-windows/src/main/resources/nucleus/native/
+          pattern: 'launcher-windows*'
+          merge-multiple: true
+
+      - name: Download launcher-linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-linux/src/main/resources/nucleus/native/
+          pattern: 'launcher-linux-*'
+          merge-multiple: true
+
+      - name: Download launcher-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-macos/src/main/resources/nucleus/native/
+          pattern: 'launcher-macos*'
+          merge-multiple: true
+
+      - name: Download global-hotkey artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: global-hotkey/src/main/resources/nucleus/native/
+          pattern: 'global-hotkey-*'
+          merge-multiple: true
+
+      - name: Download menu-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: menu-macos/src/main/resources/nucleus/native/
+          pattern: 'menu-macos*'
+          merge-multiple: true
+
+      - name: Download system-info artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: system-info/src/main/resources/nucleus/native/
+          pattern: 'system-info-*'
+          merge-multiple: true
+
+      - name: Download scheduler artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: scheduler/src/main/resources/nucleus/native/
+          pattern: 'scheduler-*'
+          merge-multiple: true
+
+      - name: Download media-control artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: media-control/src/main/resources/nucleus/native/
+          pattern: 'media-control-*'
+          merge-multiple: true
+
+      - name: Setup Nucleus (GraalVM)
+        uses: ./.github/actions/setup-nucleus
+        with:
+          graalvm: 'true'
+          setup-gradle: 'true'
+          setup-node: 'true'
+
+      - name: Build GraalVM native packages
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            ./gradlew :jewel-sample:packageGraalvmDeb -PnativeMarch=compatibility --no-daemon --stacktrace
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            ./gradlew :jewel-sample:packageGraalvmDmg -PnativeMarch=compatibility --no-daemon --stacktrace
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            ./gradlew :jewel-sample:packageGraalvmNsis -PnativeMarch=compatibility --no-daemon --stacktrace
+          fi
+
+      - name: Upload GraalVM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: graalvm-jewel-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            jewel-sample/build/compose/binaries/**/graalvm-*/**
+          if-no-files-found: error
+
+  publish:
+    name: Publish Release
+    needs: [build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Download all GraalVM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: graalvm-jewel-*
+
+      - name: Determine version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          if [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-beta"* ]]; then
+            echo "PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.deb' -o -name '*.dmg' -o -name '*.exe' -o -name 'latest*.yml' -o -name 'beta*.yml' -o -name 'alpha*.yml' \) -exec cp {} release-assets/ \;
+          echo "==> Release assets:"
+          ls -lh release-assets/
+
+      - name: Upload to GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+
+          if [ "$(ls -A release-assets/)" ]; then
+            # Create the release if it doesn't exist yet, then upload assets
+            if ! gh release view "$TAG" -R "$REPO" > /dev/null 2>&1; then
+              ARGS=(release create "$TAG" --title "$TAG" --generate-notes -R "$REPO")
+              if [ "$PRERELEASE" = "true" ]; then
+                ARGS+=(--prerelease)
+              fi
+              gh "${ARGS[@]}"
+            fi
+
+            gh release upload "$TAG" release-assets/* --clobber -R "$REPO"
+          else
+            echo "::error::No release assets found"
+            exit 1
+          fi

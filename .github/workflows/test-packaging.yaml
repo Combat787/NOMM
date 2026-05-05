@@ -1,0 +1,245 @@
+name: Test Packaging (All Platforms)
+
+on:
+  pull_request:
+    branches:
+      - '*'
+
+concurrency:
+  group: test-packaging-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-natives:
+    uses: ./.github/workflows/build-natives.yaml
+
+  build:
+    needs: build-natives
+    name: Package - ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            arch: amd64
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            arch: arm64
+          - name: Windows x64
+            os: windows-latest
+            arch: amd64
+          - name: Windows ARM64
+            os: windows-11-arm
+            arch: arm64
+            node-version: '22' # npm 11 (Node 24) has ECOMPROMISED bugs on Windows ARM64
+          - name: macOS ARM64
+            os: macos-latest
+            arch: arm64
+            jbr-download-url: 'https://github.com/kdroidFilter/JetBrainsRuntime/releases/download/v25.0.2b329.66-rtl/jdk-macos-aarch64.tar.gz'
+          - name: macOS Intel
+            os: macos-15-intel
+            arch: amd64
+            jbr-download-url: 'https://github.com/kdroidFilter/JetBrainsRuntime/releases/download/v25.0.2b329.66-rtl/jdk-macos-x64.tar.gz'
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Nucleus
+        uses: ./.github/actions/setup-nucleus
+        with:
+          jbr-version: '25.0.2b329.66'
+          jbr-download-url: ${{ matrix.jbr-download-url || '' }}
+          packaging-tools: 'true'
+          flatpak: 'true'
+          snap: 'true'
+          setup-gradle: 'true'
+          setup-node: 'true'
+          node-version: ${{ matrix.node-version || '24' }}
+
+      - name: Download darkmode-detector native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: darkmode-detector/src/main/resources/nucleus/native/
+          pattern: '*-natives*'
+          merge-multiple: true
+
+      - name: Download native-ssl artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-ssl/src/main/resources/nucleus/native/
+          pattern: 'ssl-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-jbr artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-jbr/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-jbr-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-jni artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-jni/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-jni-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-core artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-core/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-core-*'
+          merge-multiple: true
+
+      - name: Download linux-hidpi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: linux-hidpi/src/main/resources/nucleus/native/
+          pattern: 'linux-hidpi-*'
+          merge-multiple: true
+
+      - name: Download system-color artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: system-color/src/main/resources/nucleus/native/
+          pattern: 'system-color-*'
+          merge-multiple: true
+
+      - name: Download energy-manager artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: energy-manager/src/main/resources/nucleus/native/
+          pattern: 'energy-manager-*'
+          merge-multiple: true
+
+      - name: Download taskbar-progress artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: taskbar-progress/src/main/resources/nucleus/native/
+          pattern: 'taskbar-progress-*'
+          merge-multiple: true
+
+      - name: Download notification-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-macos/src/main/resources/nucleus/native/
+          pattern: 'notification-macos*'
+          merge-multiple: true
+
+      - name: Download service-management-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: service-management-macos/src/main/resources/nucleus/native/
+          pattern: 'service-management-macos*'
+          merge-multiple: true
+
+      - name: Download notification-linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-linux/src/main/resources/nucleus/native/
+          pattern: 'notification-linux-*'
+          merge-multiple: true
+
+      - name: Download notification-windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-windows/src/main/resources/nucleus/native/
+          pattern: 'notification-windows*'
+          merge-multiple: true
+
+      - name: Download autolaunch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: autolaunch/src/main/resources/nucleus/native/
+          pattern: 'autolaunch*'
+          merge-multiple: true
+
+      - name: Download launcher-windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-windows/src/main/resources/nucleus/native/
+          pattern: 'launcher-windows*'
+          merge-multiple: true
+
+      - name: Download launcher-linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-linux/src/main/resources/nucleus/native/
+          pattern: 'launcher-linux-*'
+          merge-multiple: true
+
+      - name: Download launcher-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-macos/src/main/resources/nucleus/native/
+          pattern: 'launcher-macos*'
+          merge-multiple: true
+
+      - name: Download global-hotkey artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: global-hotkey/src/main/resources/nucleus/native/
+          pattern: 'global-hotkey-*'
+          merge-multiple: true
+
+      - name: Download menu-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: menu-macos/src/main/resources/nucleus/native/
+          pattern: 'menu-macos*'
+          merge-multiple: true
+
+      - name: Download system-info artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: system-info/src/main/resources/nucleus/native/
+          pattern: 'system-info-*'
+          merge-multiple: true
+
+      - name: Download scheduler artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: scheduler/src/main/resources/nucleus/native/
+          pattern: 'scheduler-*'
+          merge-multiple: true
+
+      - name: Download media-control artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: media-control/src/main/resources/nucleus/native/
+          pattern: 'media-control-*'
+          merge-multiple: true
+
+      - name: Build packages
+        shell: bash
+        run: ./gradlew :example:packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
+
+      - name: Upload packaged artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-packages-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            example/build/compose/binaries/**/*.deb
+            example/build/compose/binaries/**/*.rpm
+            example/build/compose/binaries/**/*.snap
+            example/build/compose/binaries/**/*.flatpak
+            example/build/compose/binaries/**/*.AppImage
+            example/build/compose/binaries/**/*.appimage
+            example/build/compose/binaries/**/*.msi
+            example/build/compose/binaries/**/*.exe
+            example/build/compose/binaries/**/*.appx
+            !example/build/compose/binaries/**/runtime/**
+            example/build/compose/binaries/**/*.7z
+            example/build/compose/binaries/**/*.pkg
+            example/build/compose/binaries/**/*.dmg
+            example/build/compose/binaries/**/*.zip
+            example/build/compose/binaries/**/*.tar
+            example/build/compose/binaries/**/*.tar.gz
+            example/build/compose/binaries/**/*.blockmap
+            !example/build/compose/binaries/**/app/**
+          if-no-files-found: warn

@@ -1,0 +1,290 @@
+name: Pre Merge Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  build-natives:
+    uses: ./.github/workflows/build-natives.yaml
+
+  gradle:
+    needs: build-natives
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+      GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Download darkmode-detector native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: darkmode-detector/src/main/resources/nucleus/native/
+          pattern: '*-natives*'
+          merge-multiple: true
+
+      - name: Download native-ssl artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-ssl/src/main/resources/nucleus/native/
+          pattern: 'ssl-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-jbr artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-jbr/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-jbr-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-jni artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-jni/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-jni-*'
+          merge-multiple: true
+
+      - name: Download decorated-window-core artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: decorated-window-core/src/main/resources/nucleus/native/
+          pattern: 'decorated-window-core-*'
+          merge-multiple: true
+
+      - name: Download linux-hidpi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: linux-hidpi/src/main/resources/nucleus/native/
+          pattern: 'linux-hidpi-*'
+          merge-multiple: true
+
+      - name: Download system-color artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: system-color/src/main/resources/nucleus/native/
+          pattern: 'system-color-*'
+          merge-multiple: true
+
+      - name: Download energy-manager artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: energy-manager/src/main/resources/nucleus/native/
+          pattern: 'energy-manager-*'
+          merge-multiple: true
+
+      - name: Download taskbar-progress artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: taskbar-progress/src/main/resources/nucleus/native/
+          pattern: 'taskbar-progress-*'
+          merge-multiple: true
+
+      - name: Download notification-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-macos/src/main/resources/nucleus/native/
+          pattern: 'notification-macos*'
+          merge-multiple: true
+
+      - name: Download service-management-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: service-management-macos/src/main/resources/nucleus/native/
+          pattern: 'service-management-macos*'
+          merge-multiple: true
+
+      - name: Download notification-linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-linux/src/main/resources/nucleus/native/
+          pattern: 'notification-linux-*'
+          merge-multiple: true
+
+      - name: Download notification-windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: notification-windows/src/main/resources/nucleus/native/
+          pattern: 'notification-windows*'
+          merge-multiple: true
+
+      - name: Download autolaunch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: autolaunch/src/main/resources/nucleus/native/
+          pattern: 'autolaunch*'
+          merge-multiple: true
+
+      - name: Download launcher-windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-windows/src/main/resources/nucleus/native/
+          pattern: 'launcher-windows*'
+          merge-multiple: true
+
+      - name: Download launcher-linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-linux/src/main/resources/nucleus/native/
+          pattern: 'launcher-linux-*'
+          merge-multiple: true
+
+      - name: Download launcher-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: launcher-macos/src/main/resources/nucleus/native/
+          pattern: 'launcher-macos*'
+          merge-multiple: true
+
+      - name: Download global-hotkey artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: global-hotkey/src/main/resources/nucleus/native/
+          pattern: 'global-hotkey-*'
+          merge-multiple: true
+
+      - name: Download menu-macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: menu-macos/src/main/resources/nucleus/native/
+          pattern: 'menu-macos*'
+          merge-multiple: true
+
+      - name: Download system-info artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: system-info/src/main/resources/nucleus/native/
+          pattern: 'system-info-*'
+          merge-multiple: true
+
+      - name: Download scheduler artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: scheduler/src/main/resources/nucleus/native/
+          pattern: 'scheduler-*'
+          merge-multiple: true
+
+      - name: Download media-control artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: media-control/src/main/resources/nucleus/native/
+          pattern: 'media-control-*'
+          merge-multiple: true
+
+      - name: Verify all natives present
+        run: |
+          EXPECTED=(
+            "darkmode-detector/src/main/resources/nucleus/native/win32-x64/nucleus_windows_theme.dll"
+            "darkmode-detector/src/main/resources/nucleus/native/win32-aarch64/nucleus_windows_theme.dll"
+            "darkmode-detector/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_darkmode.dylib"
+            "darkmode-detector/src/main/resources/nucleus/native/darwin-x64/libnucleus_darkmode.dylib"
+            "darkmode-detector/src/main/resources/nucleus/native/linux-x64/libnucleus_linux_theme.so"
+            "darkmode-detector/src/main/resources/nucleus/native/linux-aarch64/libnucleus_linux_theme.so"
+            "native-ssl/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_ssl.dylib"
+            "native-ssl/src/main/resources/nucleus/native/darwin-x64/libnucleus_ssl.dylib"
+            "native-ssl/src/main/resources/nucleus/native/win32-x64/nucleus_ssl.dll"
+            "native-ssl/src/main/resources/nucleus/native/win32-aarch64/nucleus_ssl.dll"
+            "decorated-window-jbr/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_macos.dylib"
+            "decorated-window-jbr/src/main/resources/nucleus/native/darwin-x64/libnucleus_macos.dylib"
+            "decorated-window-jni/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_macos_jni.dylib"
+            "decorated-window-jni/src/main/resources/nucleus/native/darwin-x64/libnucleus_macos_jni.dylib"
+            "decorated-window-jni/src/main/resources/nucleus/native/linux-x64/libnucleus_linux_jni.so"
+            "decorated-window-jni/src/main/resources/nucleus/native/linux-aarch64/libnucleus_linux_jni.so"
+            "decorated-window-jni/src/main/resources/nucleus/native/win32-x64/nucleus_windows_decoration.dll"
+            "decorated-window-jni/src/main/resources/nucleus/native/win32-aarch64/nucleus_windows_decoration.dll"
+            "linux-hidpi/src/main/resources/nucleus/native/linux-x64/libnucleus_linux_hidpi_jni.so"
+            "linux-hidpi/src/main/resources/nucleus/native/linux-aarch64/libnucleus_linux_hidpi_jni.so"
+            "system-color/src/main/resources/nucleus/native/linux-x64/libnucleus_systemcolor.so"
+            "system-color/src/main/resources/nucleus/native/linux-aarch64/libnucleus_systemcolor.so"
+            "system-color/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_systemcolor.dylib"
+            "system-color/src/main/resources/nucleus/native/darwin-x64/libnucleus_systemcolor.dylib"
+            "system-color/src/main/resources/nucleus/native/win32-x64/nucleus_systemcolor.dll"
+            "system-color/src/main/resources/nucleus/native/win32-aarch64/nucleus_systemcolor.dll"
+            "energy-manager/src/main/resources/nucleus/native/win32-x64/nucleus_energy_manager.dll"
+            "energy-manager/src/main/resources/nucleus/native/win32-aarch64/nucleus_energy_manager.dll"
+            "energy-manager/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_energy_manager.dylib"
+            "energy-manager/src/main/resources/nucleus/native/darwin-x64/libnucleus_energy_manager.dylib"
+            "energy-manager/src/main/resources/nucleus/native/linux-x64/libnucleus_energy_manager.so"
+            "energy-manager/src/main/resources/nucleus/native/linux-aarch64/libnucleus_energy_manager.so"
+            "taskbar-progress/src/main/resources/nucleus/native/win32-x64/nucleus_taskbar_progress.dll"
+            "taskbar-progress/src/main/resources/nucleus/native/win32-aarch64/nucleus_taskbar_progress.dll"
+            "taskbar-progress/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_taskbar_progress.dylib"
+            "taskbar-progress/src/main/resources/nucleus/native/darwin-x64/libnucleus_taskbar_progress.dylib"
+            "notification-macos/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_notification.dylib"
+            "notification-macos/src/main/resources/nucleus/native/darwin-x64/libnucleus_notification.dylib"
+            "service-management-macos/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_service_management.dylib"
+            "service-management-macos/src/main/resources/nucleus/native/darwin-x64/libnucleus_service_management.dylib"
+            "notification-linux/src/main/resources/nucleus/native/linux-x64/libnucleus_notification_linux.so"
+            "notification-linux/src/main/resources/nucleus/native/linux-aarch64/libnucleus_notification_linux.so"
+            "notification-windows/src/main/resources/nucleus/native/win32-x64/nucleus_notification_windows.dll"
+            "notification-windows/src/main/resources/nucleus/native/win32-aarch64/nucleus_notification_windows.dll"
+            "autolaunch/src/main/resources/nucleus/native/win32-x64/nucleus_autolaunch.dll"
+            "autolaunch/src/main/resources/nucleus/native/win32-aarch64/nucleus_autolaunch.dll"
+            "autolaunch/src/main/resources/nucleus/native/linux-x64/libnucleus_autolaunch_linux.so"
+            "autolaunch/src/main/resources/nucleus/native/linux-aarch64/libnucleus_autolaunch_linux.so"
+            "launcher-windows/src/main/resources/nucleus/native/win32-x64/nucleus_launcher_windows.dll"
+            "launcher-windows/src/main/resources/nucleus/native/win32-aarch64/nucleus_launcher_windows.dll"
+            "launcher-linux/src/main/resources/nucleus/native/linux-x64/libnucleus_launcher_linux.so"
+            "launcher-linux/src/main/resources/nucleus/native/linux-aarch64/libnucleus_launcher_linux.so"
+            "launcher-macos/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_launcher_macos.dylib"
+            "launcher-macos/src/main/resources/nucleus/native/darwin-x64/libnucleus_launcher_macos.dylib"
+            "global-hotkey/src/main/resources/nucleus/native/win32-x64/nucleus_global_hotkey.dll"
+            "global-hotkey/src/main/resources/nucleus/native/win32-aarch64/nucleus_global_hotkey.dll"
+            "global-hotkey/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_global_hotkey.dylib"
+            "global-hotkey/src/main/resources/nucleus/native/darwin-x64/libnucleus_global_hotkey.dylib"
+            "global-hotkey/src/main/resources/nucleus/native/linux-x64/libnucleus_global_hotkey.so"
+            "global-hotkey/src/main/resources/nucleus/native/linux-aarch64/libnucleus_global_hotkey.so"
+            "menu-macos/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_menu_macos.dylib"
+            "menu-macos/src/main/resources/nucleus/native/darwin-x64/libnucleus_menu_macos.dylib"
+            "decorated-window-core/src/main/resources/nucleus/native/win32-x64/nucleus_layout_direction.dll"
+            "decorated-window-core/src/main/resources/nucleus/native/win32-aarch64/nucleus_layout_direction.dll"
+            "decorated-window-core/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_layout_direction.dylib"
+            "decorated-window-core/src/main/resources/nucleus/native/darwin-x64/libnucleus_layout_direction.dylib"
+            "decorated-window-core/src/main/resources/nucleus/native/linux-x64/libnucleus_layout_direction.so"
+            "decorated-window-core/src/main/resources/nucleus/native/linux-aarch64/libnucleus_layout_direction.so"
+            "system-info/src/main/resources/nucleus/native/win32-x64/nucleus_system_info.dll"
+            "system-info/src/main/resources/nucleus/native/win32-aarch64/nucleus_system_info.dll"
+            "system-info/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_system_info.dylib"
+            "system-info/src/main/resources/nucleus/native/darwin-x64/libnucleus_system_info.dylib"
+            "system-info/src/main/resources/nucleus/native/linux-x64/libnucleus_system_info.so"
+            "system-info/src/main/resources/nucleus/native/linux-aarch64/libnucleus_system_info.so"
+            "scheduler/src/main/resources/nucleus/native/win32-x64/nucleus_scheduler.dll"
+            "scheduler/src/main/resources/nucleus/native/win32-aarch64/nucleus_scheduler.dll"
+            "scheduler/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_scheduler.dylib"
+            "scheduler/src/main/resources/nucleus/native/darwin-x64/libnucleus_scheduler.dylib"
+            "scheduler/src/main/resources/nucleus/native/linux-x64/libnucleus_scheduler_linux.so"
+            "scheduler/src/main/resources/nucleus/native/linux-aarch64/libnucleus_scheduler_linux.so"
+            "media-control/src/main/resources/nucleus/native/linux-x64/libnucleus_media_control_linux.so"
+            "media-control/src/main/resources/nucleus/native/linux-aarch64/libnucleus_media_control_linux.so"
+            "media-control/src/main/resources/nucleus/native/darwin-aarch64/libnucleus_media_control_macos.dylib"
+            "media-control/src/main/resources/nucleus/native/darwin-x64/libnucleus_media_control_macos.dylib"
+            "media-control/src/main/resources/nucleus/native/win32-x64/nucleus_media_control_windows.dll"
+            "media-control/src/main/resources/nucleus/native/win32-aarch64/nucleus_media_control_windows.dll"
+          )
+          MISSING=0
+          for f in "${EXPECTED[@]}"; do
+            if [ -f "$f" ]; then
+              echo "OK: $f ($(wc -c < "$f") bytes)"
+            else
+              echo "MISSING: $f" >&2
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" = "1" ]; then exit 1; fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Run Gradle tasks
+        run: ./gradlew preMerge --continue
