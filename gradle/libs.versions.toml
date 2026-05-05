@@ -8,6 +8,7 @@ kotlinx-coroutines = "1.10.2"
 ktor = "3.3.3"
 logback = "1.5.24"
 material3 = "1.11.0-alpha02"
+nucleus = "1.14.5"
 
 kotlinx-serialization = "1.10.0"
 kotlinx-datetime = "0.7.1"
@@ -49,10 +50,27 @@ filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose
 
 
 
-compose-colorpicker = { module = "com.github.skydoves:colorpicker-compose", version.ref = "colorpicker" }
 materialKolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
 
 jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "multiplatform-nav3-ui" }
+
+
+nucleus-core = { group = "io.github.kdroidfilter", name = "nucleus.core-runtime", version.ref = "nucleus" }
+nucleus-aot = { group = "io.github.kdroidfilter", name = "nucleus.aot-runtime", version.ref = "nucleus" }
+nucleus-updater = { group = "io.github.kdroidfilter", name = "nucleus.updater-runtime", version.ref = "nucleus" }
+nucleus-nativehttp = { group = "io.github.kdroidfilter", name = "nucleus.native-http", version.ref = "nucleus" }
+
+nucleus-window-jni = { group = "io.github.kdroidfilter", name = "nucleus.decorated-window-jni", version.ref = "nucleus" }
+nucleus-window-material3 = { group = "io.github.kdroidfilter", name = "nucleus.decorated-window-material3", version.ref = "nucleus" }
+nucleus-darkmode = { group = "io.github.kdroidfilter", name = "nucleus.darkmode-detector", version.ref = "nucleus" }
+
+nucleus-taskbar = { group = "io.github.kdroidfilter", name = "nucleus.taskbar-progress", version.ref = "nucleus" }
+nucleus-system-info = { group = "io.github.kdroidfilter", name = "nucleus.system-info", version.ref = "nucleus" }
+nucleus-energy = { group = "io.github.kdroidfilter", name = "nucleus.energy-manager", version.ref = "nucleus" }
+
+nucleus-notif-win = { group = "io.github.kdroidfilter", name = "nucleus.notification-windows", version.ref = "nucleus" }
+nucleus-notif-mac = { group = "io.github.kdroidfilter", name = "nucleus.notification-macos", version.ref = "nucleus" }
+nucleus-notif-linux = { group = "io.github.kdroidfilter", name = "nucleus.notification-linux", version.ref = "nucleus" }
 
 
 [plugins]
@@ -64,3 +82,4 @@ ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 buildkonfig = { id = "com.codingfeline.buildkonfig", version = "0.18.0" }
+nucleus = { id = "io.github.kdroidfilter.nucleus", version.ref = "nucleus" }

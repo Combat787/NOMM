@@ -1,0 +1,193 @@
+package com.combat.nomm
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
+import io.github.kdroidfilter.nucleus.updater.NucleusUpdater
+import io.github.kdroidfilter.nucleus.updater.UpdateEvent
+import io.github.kdroidfilter.nucleus.updater.UpdateInfo
+import io.github.kdroidfilter.nucleus.updater.UpdateResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.awt.datatransfer.StringSelection
+
+@Composable
+fun LaunchOptionDialog(onDismiss: () -> Unit, onCopy: (String) -> Unit) {
+    val command = "WINEDLLOVERRIDES=\"winhttp.dll=n,b\" %command%"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        title = { Text("Required Launch Options") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("To make BepInEx work on Linux, add this to the Steam Launch Options:")
+                Surface(
+                    onClick = { onCopy(command) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = command,
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    )
+}
+
+@Composable
+@OptIn(ExperimentalComposeUiApi::class)
+fun Dialogs() {
+    val clipboard = LocalClipboard.current
+
+    val launchOptionDialog by RepoMods.launchOptionDialog.collectAsState()
+
+
+    if (launchOptionDialog) {
+        LaunchOptionDialog(
+            onDismiss = { RepoMods.launchOptionDialog.value = false },
+            onCopy = { text ->
+                scope.launch {
+                    clipboard.setClipEntry(ClipEntry(StringSelection(text)))
+                }
+            }
+        )
+    }
+
+    var postUpdateEvent by remember { mutableStateOf<UpdateEvent?>(null) }
+
+    LaunchedEffect(Unit) {
+
+        postUpdateEvent = updater.consumeUpdateEvent()
+
+        checkForUpdate()
+    }
+
+
+    SettingsManager.availableUpdateInfo?.let { info ->
+        UpdateDialog(
+            info = info,
+            updater = updater,
+            onDismiss = { SettingsManager.availableUpdateInfo = null }
+        )
+    }
+
+    postUpdateEvent?.let { event ->
+        WhatsNewDialog(
+            event = event,
+            onDismiss = { postUpdateEvent = null }
+        )
+    }
+}
+
+suspend fun checkForUpdate() {
+    val result = updater.checkForUpdates()
+    if (result is UpdateResult.Available) {
+        SettingsManager.availableUpdateInfo = result.info
+    }
+}
+
+@Composable
+fun UpdateDialog(
+    info: UpdateInfo,
+    updater: NucleusUpdater,
+    onDismiss: () -> Unit,
+) {
+    var progress by remember { mutableStateOf(0.0) }
+    var isDownloading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isDownloading) onDismiss()
+        },
+        title = {
+            Text(
+                text = "Update ${info.version} Available",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
+        text = {
+            if (isDownloading) {
+                Spacer(Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LinearProgressIndicator(
+                        progress = { (progress / 100.0).toFloat() },
+                        modifier = Modifier.fillMaxWidth(),
+                        strokeCap = StrokeCap.Round
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (!isDownloading) {
+                Button(
+                    onClick = {
+                        isDownloading = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                updater.downloadUpdate(info).collect { downloadProgress ->
+                                    progress = downloadProgress.percent
+
+                                    downloadProgress.file?.let { installerFile ->
+                                        updater.installAndRestart(installerFile)
+                                    }
+                                }
+                            } catch (_: Exception) {
+                                isDownloading = false
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Download & Install")
+                }
+            }
+        },
+        dismissButton = {
+            if (!isDownloading) {
+                TextButton(onClick = onDismiss) {
+                    Text("Later")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun WhatsNewDialog(event: UpdateEvent, onDismiss: () -> Unit) {
+
+    AlertDialog(
+        onDismissRequest = {
+            onDismiss()
+        },
+        title = {
+            Text(
+                text = "Updated from ${event.previousVersion} to ${event.newVersion}",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
+        text = null,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Dismiss")
+            }
+        }
+    )
+}

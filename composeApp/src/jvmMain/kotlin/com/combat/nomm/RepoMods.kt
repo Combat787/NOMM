@@ -1,24 +1,13 @@
 package com.combat.nomm
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.serialization.json.Json
 import java.io.File
 
 object RepoMods {
-    val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        prettyPrint = true
-    }
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
 
     val mods: StateFlow<List<Extension>>
@@ -39,9 +28,9 @@ object RepoMods {
                 val fetched = if (SettingsManager.config.value.fakeManifest) {
                     fetchFakeManifest()
                 } else {
-                    NetworkClient.fetchManifest(SettingsManager.config.value.manifestUrl) ?: SettingsManager.config.value.cachedManifest
+                    NetworkClient.fetchManifest() ?: SettingsManager.config.value.cachedManifest
                 }
-                mods.value = fetched
+                mods.value = fetched.distinctBy { it.id }
             } finally {
                 isLoading.value = false
                 mutex.unlock()
@@ -72,7 +61,7 @@ object RepoMods {
             [Chainloader]
             HideManagerGameObject = true
             """.trimIndent())
-        Installer.installMod("BepInEx", url, gameFolder, true) {
+        Installer.installMod("BepInEx", url, gameFolder,null, true) {
             LocalMods.refresh()
         }
     }
@@ -109,7 +98,7 @@ object RepoMods {
         if (dir.exists()) dir.deleteRecursively()
         if (!dir.mkdirs()) return
 
-        Installer.installMod(extension.id, targetArtifact.downloadUrl, dir) {
+        Installer.installMod(extension.id, targetArtifact.downloadUrl, dir, targetArtifact.hash) {
             val metaData = ModMeta(
                 id = extension.id,
                 artifact = targetArtifact,

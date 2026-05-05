@@ -8,22 +8,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import java.io.File
-
-private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 @Composable
 fun MainNavigationRail(
@@ -38,6 +35,7 @@ fun MainNavigationRail(
             .fillMaxHeight()
             .width(IntrinsicSize.Min)
             .clip(MaterialTheme.shapes.large),
+        containerColor = Color.Transparent,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),

@@ -47,8 +47,8 @@ fun LibraryScreen(
 
     val filteredMods = rememberFilteredExtensions(installedExtensions, searchQuery)
 
-    val state = rememberLazyListState() 
-    
+    val state = rememberLazyListState()
+
     val isScrollable by remember {
         derivedStateOf {
             state.layoutInfo.visibleItemsInfo.size < state.layoutInfo.totalItemsCount ||
@@ -88,7 +88,8 @@ fun LibraryScreen(
                             )
                         }
                         val contentColor = MaterialTheme.colorScheme.onSecondary
-                        val itemColors = MenuDefaults.itemColors(textColor = contentColor, leadingIconColor = contentColor)
+                        val itemColors =
+                            MenuDefaults.itemColors(textColor = contentColor, leadingIconColor = contentColor)
                         DropdownMenu(
                             shape = MaterialTheme.shapes.small,
                             offset = DpOffset(x = 0.dp, y = 4.dp),
@@ -103,13 +104,15 @@ fun LibraryScreen(
                                 leadingIcon = { Icon(painterResource(Res.drawable.file_export_24px), null) },
                                 colors = itemColors,
                             )
-                            DropdownMenuItem(text = { Text("Import Modpack") }, onClick = {
+                            DropdownMenuItem(
+                                text = { Text("Import Modpack") }, onClick = {
                                 menuExpanded = false
                                 LocalMods.importMods()
                             }, leadingIcon = { Icon(painterResource(Res.drawable.file_open_24px), null) },
                                 colors = itemColors
                             )
-                            DropdownMenuItem(text = { Text("Add from file") }, onClick = {
+                            DropdownMenuItem(
+                                text = { Text("Add from file") }, onClick = {
                                 menuExpanded = false
                                 LocalMods.addFromFile()
                             }, leadingIcon = { Icon(painterResource(Res.drawable.folder_open_24px), null) },
@@ -149,7 +152,7 @@ fun LibraryScreen(
                 }
             } else {
                 items(filteredMods, key = { it.id }) { ext ->
-                    ModItem(mod = ext, onClick = { onOpenMod(ext.id) })
+                    ModItem(mod = ext, onTagClick = { searchQuery = it }, onClick = { onOpenMod(ext.id) })
                 }
             }
         }

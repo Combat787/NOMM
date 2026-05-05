@@ -13,21 +13,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.painterResource
-import kotlin.math.log10
-import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -97,7 +95,7 @@ fun SearchScreen(
                 }
             } else {
                 items(filteredMods, key = { it.id }) { mod ->
-                    ModItem(mod = mod, onClick = { onNavigateToMod(mod.id) })
+                    ModItem(mod = mod, onTagClick = { searchQuery = it },onClick = { onNavigateToMod(mod.id) })
                 }
             }
         }
@@ -121,99 +119,9 @@ fun SearchScreen(
     }
 }
 
-@Composable
-fun rememberFilteredExtensions(allMods: List<Extension>, searchQuery: String): List<Extension> {
-    var filteredMods by remember { mutableStateOf(allMods.sortedByDescending { it.downloadCount }) }
-    var isInitialLoad by remember { mutableStateOf(true) }
-
-    LaunchedEffect(searchQuery, allMods) {
-        if (!isInitialLoad && searchQuery.isNotEmpty()) {
-            delay(250.milliseconds)
-        }
-
-        val results = withContext(Dispatchers.Default) {
-            if (searchQuery.isBlank()) {
-                allMods.sortedByDescending { it.downloadCount }
-            } else {
-                allMods.sortFilterByQuery(searchQuery, minSimilarity = 0.3) { ext, query ->
-                    val nameScore = fuzzyPowerScore(query, ext.displayName)
-                    val idScore = fuzzyPowerScore(query, ext.id)
-                    val tagScore = ext.tags.maxOfOrNull { fuzzyPowerScore(query, it) } ?: 0.0
-                    val authorScore = ext.authors.maxOfOrNull { fuzzyPowerScore(query, it) } ?: 0.0
-
-                    val popularityFactor = log10((ext.downloadCount?.toDouble() ?: 1.0) + 1.0)
-                    val weightedScore =
-                        ((nameScore * 5.0) + (idScore * 2.0) + (authorScore * 1.5) + tagScore) * (1.0 + (popularityFactor * 0.1))
-
-                    val lengthPenalty = if (ext.displayName.length > query.length * 3) 0.9 else 1.0
-                    ext to (weightedScore * lengthPenalty)
-                }
-            }
-        }
-        filteredMods = results
-        isInitialLoad = false
-    }
-    return filteredMods
-}
-
-@Composable
-fun RowScope.SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier
-            .weight(1f),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.secondary,
-            unfocusedContainerColor = MaterialTheme.colorScheme.secondary,
-
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-
-
-            cursorColor = MaterialTheme.colorScheme.onSecondary,
-            focusedTextColor = MaterialTheme.colorScheme.onSecondary,
-            unfocusedTextColor = MaterialTheme.colorScheme.onSecondary,
-        ),
-        placeholder = {
-            Text(
-                "Search mods...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondary
-            )
-        },
-        leadingIcon = {
-            Icon(
-                painterResource(Res.drawable.search_24px),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondary,
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        painterResource(Res.drawable.close_24px),
-                        contentDescription = "Clear",
-                        tint = MaterialTheme.colorScheme.onSecondary
-                    )
-                }
-            }
-        },
-        shape = MaterialTheme.shapes.small,
-        singleLine = true,
-    )
-}
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun ModItem(mod: Extension, onClick: () -> Unit) {
+fun ModItem(mod: Extension, onTagClick: (String) -> Unit, onClick: () -> Unit) {
     val installStatuses by Installer.installStatuses.collectAsState()
     val installedMods by LocalMods.mods.collectAsState()
 
@@ -265,11 +173,11 @@ fun ModItem(mod: Extension, onClick: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
                 ) {
                     Row(
-                        modifier = Modifier.height(IntrinsicSize.Min)
-                            .horizontalScroll(rememberScrollState(), enabled = false),
+                        modifier = Modifier.height(IntrinsicSize.Min),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+
+                        ) {
                         when {
                             modMeta == null || !modMeta.isUnidentified -> {
                                 Row(
@@ -300,18 +208,32 @@ fun ModItem(mod: Extension, onClick: () -> Unit) {
                         if (mod.tags.isNotEmpty()) {
                             VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
                         }
-                        mod.tags.forEach { tag ->
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        CompositionLocalProvider(
+                            LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .horizontalScroll(rememberScrollState(), enabled = false)
                             ) {
-                                Text(
-                                    text = tag,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    maxLines = 1
-                                )
+                                mod.tags.forEach { tag ->
+                                    Card(
+                                        onClick = {
+                                            onTagClick.invoke(tag)
+                                        },
+                                        modifier = Modifier.height(IntrinsicSize.Min).semantics { role = Role.Button },
+                                        shape = CircleShape,
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onSurfaceVariant,contentColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    ) {
+                                        Text(
+                                            text = tag,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

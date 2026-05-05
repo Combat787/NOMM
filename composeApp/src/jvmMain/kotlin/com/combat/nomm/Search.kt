@@ -1,8 +1,32 @@
 package com.combat.nomm
 
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import nuclearoptionmodmanager.composeapp.generated.resources.Res
+import nuclearoptionmodmanager.composeapp.generated.resources.close_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.search_24px
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration.Companion.milliseconds
 
 fun <T> List<T>.sortFilterByQuery(
     query: String,
@@ -103,4 +127,94 @@ fun measureDamerauLevenshtein(source: CharSequence, target: CharSequence, thresh
     }
 
     return prevRow[tLen]
+}
+
+@Composable
+fun rememberFilteredExtensions(allMods: List<Extension>, searchQuery: String): List<Extension> {
+    var filteredMods by remember { mutableStateOf(allMods.sortedByDescending { it.downloadCount }) }
+    var isInitialLoad by remember { mutableStateOf(true) }
+
+    LaunchedEffect(searchQuery, allMods) {
+        if (!isInitialLoad && searchQuery.isNotEmpty()) {
+            delay(250.milliseconds)
+        }
+
+        val results = withContext(Dispatchers.Default) {
+            if (searchQuery.isBlank()) {
+                allMods.sortedByDescending { it.downloadCount }
+            } else {
+                allMods.sortFilterByQuery(searchQuery, minSimilarity = 0.3) { ext, query ->
+                    val nameScore = fuzzyPowerScore(query, ext.displayName)
+                    val idScore = fuzzyPowerScore(query, ext.id)
+                    val tagScore = ext.tags.maxOfOrNull { fuzzyPowerScore(query, it) } ?: 0.0
+                    val authorScore = ext.authors.maxOfOrNull { fuzzyPowerScore(query, it) } ?: 0.0
+
+                    val popularityFactor = log10((ext.downloadCount?.toDouble() ?: 1.0) + 1.0)
+                    val weightedScore =
+                        ((nameScore * 5.0) + (idScore * 2.0) + (authorScore * 1.5) + tagScore) * (1.0 + (popularityFactor * 0.1))
+
+                    val lengthPenalty = if (ext.displayName.length > query.length * 3) 0.9 else 1.0
+                    ext to (weightedScore * lengthPenalty)
+                }
+            }
+        }
+        filteredMods = results
+        isInitialLoad = false
+    }
+    return filteredMods
+}
+
+@Composable
+fun RowScope.SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier.Companion,
+) {
+
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier
+            .weight(1f),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.secondary,
+            unfocusedContainerColor = MaterialTheme.colorScheme.secondary,
+
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+
+
+            cursorColor = MaterialTheme.colorScheme.onSecondary,
+            focusedTextColor = MaterialTheme.colorScheme.onSecondary,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSecondary,
+        ),
+        placeholder = {
+            Text(
+                "Search mods...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondary
+            )
+        },
+        leadingIcon = {
+            Icon(
+                painterResource(Res.drawable.search_24px),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondary,
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        painterResource(Res.drawable.close_24px),
+                        contentDescription = "Clear",
+                        tint = MaterialTheme.colorScheme.onSecondary
+                    )
+                }
+            }
+        },
+        shape = MaterialTheme.shapes.small,
+        singleLine = true,
+    )
 }

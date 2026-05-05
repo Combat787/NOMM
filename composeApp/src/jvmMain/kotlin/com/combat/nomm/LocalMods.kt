@@ -7,26 +7,17 @@ import io.github.vinceglb.filekit.dialogs.openFilePicker
 import io.github.vinceglb.filekit.dialogs.openFileSaver
 import io.github.vinceglb.filekit.readString
 import io.github.vinceglb.filekit.writeString
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 object LocalMods {
-    val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        prettyPrint = true
-    }
     val isBepInExInstalled: StateFlow<Boolean>
         field = MutableStateFlow(false)
 
@@ -36,7 +27,6 @@ object LocalMods {
     val mods: StateFlow<Map<String, ModMeta>>
         field = MutableStateFlow(emptyMap())
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     init {
         loadInstalledModMetas()
@@ -140,7 +130,7 @@ object LocalMods {
 
                 val metaJson = if (file.isDirectory) File(file, "meta.json") else null
                 val meta = if (metaJson?.exists() == true) {
-                    runCatching { RepoMods.json.decodeFromString<ModMeta>(metaJson.readText()) }.getOrNull()
+                    runCatching { json.decodeFromString<ModMeta>(metaJson.readText()) }.getOrNull()
                 } else null
 
                 val id = meta?.id ?: file.nameWithoutExtension

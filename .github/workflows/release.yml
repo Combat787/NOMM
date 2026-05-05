@@ -1,0 +1,77 @@
+name: Release Desktop App (Windows & Linux)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # STEP 1: BUILD THE FILES
+  build:
+    name: Build (${{ matrix.os }} / ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, arch: amd64 }
+          - { os: windows-latest, arch: amd64 }
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Nucleus
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
+        with:
+          setup-gradle: 'true'
+
+      - name: Build packages
+        run: ./gradlew packageReleaseDistributionForCurrentOS
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+
+      - name: Upload for Publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ runner.os }}-${{ matrix.arch }}
+          path: build/compose/binaries/**/*
+
+  # STEP 2: CREATE WINDOWS BUNDLE (Optional but recommended)
+  bundle-windows:
+    needs: [build]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-Windows-*
+          path: artifacts
+      - uses: kdroidFilter/Nucleus/.github/actions/build-windows-appxbundle@main
+        with:
+          amd64-path: artifacts/release-assets-Windows-amd64
+          output-path: artifacts/release-assets-Windows-bundle
+
+  # STEP 3: PUBLISH TO GITHUB
+  publish:
+    needs: [build, bundle-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: release-assets-*
+
+      - name: Generate update YML files
+        uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
+        with:
+          artifacts-path: artifacts
+          version: ${{ github.ref_name }}
+          channel: latest
+
+      - name: Publish release
+        uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
+        with:
+          artifacts-path: artifacts
+          tag: ${{ github.ref_name }}

@@ -20,7 +20,7 @@ import org.jetbrains.compose.resources.Font
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun NommTheme(
+fun NOMMTheme(
     color: Color,
     isDark: Boolean = isSystemInDarkTheme(),
     paletteStyle: PaletteStyle,
@@ -45,7 +45,7 @@ fun getTypography(): Typography {
         Font(Res.font.JetBrainsMono, FontWeight.Normal)
     )
 
-    return androidx.compose.material3.Typography(
+    return Typography(
         displayLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 57.sp),
         displayMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 45.sp),
         displaySmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 36.sp),

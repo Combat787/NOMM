@@ -54,9 +54,14 @@ fun SettingsScreen() {
                     infoName = "Nuclear Option Mod Manager",
                     infoData = "by Combat"
                 )
-                SettingsInfoRow(
-                    infoName = "Version",
-                    infoData = BuildKonfig.VERSION
+                ClickableSettingsRow(
+                    "Version ${BuildKonfig.VERSION}",
+                    "Check for Update",
+                    onClick = {
+                        scope.launch {
+                            checkForUpdate()
+                        }
+                    }
                 )
                 ClickableSettingsRow(
                     "GitHub",
@@ -97,6 +102,29 @@ fun SettingsScreen() {
                     },
                     placeholder = "",
                 )
+                SettingsTextFieldRow(
+                    label = "Manifest Version Source URL",
+                    value = currentConfig.manifestVersionUrl,
+                    onValueChange = {
+                        SettingsManager.updateConfig(currentConfig.copy(manifestUrl = it))
+                    },
+                    placeholder = "",
+                )
+                SettingsSwitchRow(
+                    label = "Ignore Manifest Version",
+                    subLabel = "Stops checking if the manifest version is still the same when fetching.",
+                    checked = currentConfig.ignoreManifestVersion,
+                    onCheckedChange = { newValue ->
+                        SettingsManager.updateConfig(currentConfig.copy(ignoreManifestVersion = newValue))
+                    }
+                )
+                ClickableSettingsRow(
+                    label = "Manifest Version",
+                    subLabel = currentConfig.manifestVersion.toString(),
+                    onClick = {
+                        SettingsManager.updateConfig(currentConfig.copy(manifestVersion = Version(0)))
+                    },
+                )
                 SettingsSwitchRow(
                     label = "Fake Manifest",
                     subLabel = "Generates Fake Manifest Data useful to test the UI better.",
@@ -104,7 +132,8 @@ fun SettingsScreen() {
                     onCheckedChange = { newValue ->
                         SettingsManager.updateConfig(currentConfig.copy(fakeManifest = newValue))
                         RepoMods.fetchManifest()
-                    })
+                    }
+                )
             }
             SettingsGroup(title = "Appearance") {
                 SettingsColorPicker(

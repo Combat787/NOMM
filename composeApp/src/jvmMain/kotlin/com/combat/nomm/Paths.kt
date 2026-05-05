@@ -20,6 +20,7 @@ fun getGameFolder(folderName: String, executableName: String): File? {
         if (exeFile.exists()) gameDir else null
     }
 }
+
 fun getSteamPath(): String? {
     val os = System.getProperty("os.name").lowercase()
     val home = System.getProperty("user.home")
@@ -27,64 +28,14 @@ fun getSteamPath(): String? {
     return when {
         os.contains("win") -> {
             val pb = ProcessBuilder("reg", "query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath")
-            val out = try { pb.start().inputStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
+            val out = runCatching { pb.start().inputStream.bufferedReader().use { it.readText() } }.getOrElse { "" }
             "SteamPath\\s+REG_SZ\\s+(.*)".toRegex().find(out)?.groupValues?.get(1)?.trim()
         }
+
         os.contains("mac") -> "$home/Library/Application Support/Steam"
         else -> listOf("$home/.local/share/Steam", "$home/.steam/steam").find { File(it).exists() }
     }
 }
-
-fun applyNuclearOptionFix() {
-    val steamPath = getSteamPath() ?: return
-    val userDataDir = File(steamPath, "userdata")
-    val steamId = userDataDir.listFiles()?.firstOrNull { it.isDirectory && it.name.all { it.isDigit() } }?.name ?: return
-    val configFile = File(userDataDir, "$steamId/config/localconfig.vdf")
-
-    if (!configFile.exists()) return
-
-    val appId = "2168680"
-    val newParam = """WINEDLLOVERRIDES="winhttp=n,b" %command%"""
-    val lines = configFile.readLines()
-    val result = mutableListOf<String>()
-
-    var inTargetApp = false
-    var depth = 0
-    var optionFound = false
-
-    for (line in lines) {
-        val trimmed = line.trim()
-
-        if (trimmed == "\"$appId\"") {
-            inTargetApp = true
-        }
-
-        if (inTargetApp) {
-            if (trimmed.contains("{")) depth++
-            if (trimmed.contains("}")) depth--
-
-            if (trimmed.startsWith("\"LaunchOptions\"", ignoreCase = true)) {
-                continue
-            }
-
-            result.add(line)
-
-            if (trimmed == "{" && depth == 1 && !optionFound) {
-                result.add("\t\t\t\t\t\"LaunchOptions\"\t\t\"$newParam\"")
-                optionFound = true
-            }
-
-            if (depth == 0 && trimmed == "}") {
-                inTargetApp = false
-            }
-        } else {
-            result.add(line)
-        }
-    }
-
-    configFile.writeText(result.joinToString("\n"))
-}
-
 
 fun getNuclearOptionFolder(): File {
     val os = System.getProperty("os.name").lowercase()
@@ -94,9 +45,11 @@ fun getNuclearOptionFolder(): File {
         os.contains("win") -> {
             File(userHome, "AppData/LocalLow/Shockfront/NuclearOption")
         }
+
         os.contains("mac") -> {
             File(userHome, "Library/Application Support/Shockfront/NuclearOption")
         }
+
         else -> {
             File(userHome, ".local/share/Shockfront/NuclearOption")
         }

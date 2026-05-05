@@ -43,36 +43,7 @@ data class UrlReference(
 data class PackageReference(
     val id: String,
     val version: Version? = null
-) {
-}
-
-@Serializable(with = VersionSerializer::class)
-class Version(vararg components: Int) : Comparable<Version> {
-
-    private val parts: List<Int> = components.toList()
-
-    override fun toString(): String = parts.joinToString(".")
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Version) return false
-        return this.parts == other.parts
-    }
-
-    override fun hashCode(): Int = parts.hashCode()
-
-    override fun compareTo(other: Version): Int {
-        val maxLength = maxOf(this.parts.size, other.parts.size)
-        for (i in 0 until maxLength) {
-            val thisPart = this.parts.getOrElse(i) { 0 }
-            val otherPart = other.parts.getOrElse(i) { 0 }
-            if (thisPart != otherPart) {
-                return thisPart.compareTo(otherPart)
-            }
-        }
-        return 0
-    }
-}
+)
 
 
 fun fetchFakeManifest(): List<Extension> {

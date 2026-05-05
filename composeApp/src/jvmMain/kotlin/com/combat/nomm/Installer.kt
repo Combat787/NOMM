@@ -5,86 +5,105 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.File
-import java.util.concurrent.ConcurrentHashMap
-import net.sf.sevenzipjbinding.*
+import net.sf.sevenzipjbinding.SevenZip
+import net.sf.sevenzipjbinding.SevenZipException
 import net.sf.sevenzipjbinding.util.ByteArrayStream
+import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 object Installer {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val locks = ConcurrentHashMap<String, Mutex>()
+    val bepinexStatus = MutableStateFlow<TaskState?>(null)
+    val installStatuses = MutableStateFlow<Map<String, TaskState>>(emptyMap())
 
-    val bepinexStatus: StateFlow<TaskState?>
-        field = MutableStateFlow<TaskState?>(null)
-
-    val installStatuses: StateFlow<Map<String, TaskState>>
-        field = MutableStateFlow<Map<String, TaskState>>(emptyMap())
-
-    fun installMod(modId: String, url: String, dir: File, isBepInEx: Boolean = false, onSuccess: () -> Unit) {
-
-        updateState(modId, TaskState(TaskState.Phase.DOWNLOADING, 0f, null, false), isBepInEx)
-
+    fun installMod(
+        modId: String, url: String, dir: File,
+        hash: String?,
+        isBepInEx: Boolean = false, onSuccess: () -> Unit,
+    ) {
         scope.launch {
+            val currentJob = coroutineContext[Job]
+            val cancelAction: () -> Unit = {
+                currentJob?.cancel()
+            }
+
+            updateState(modId, TaskState(TaskState.Phase.DOWNLOADING, 0f, true, cancelAction), isBepInEx)
+
             val mutex = locks.getOrPut(modId) { Mutex() }
-            mutex.withLock {
-                val job = coroutineContext[Job]
-                try {
-                    val bytes = downloadWithRetry(job, url, modId, isBepInEx)
-                    updateState(modId, TaskState(TaskState.Phase.EXTRACTING, null, null, false), isBepInEx)
+
+            try {
+                mutex.withLock {
+
+                    val bytes = downloadWithRetry(modId, url, isBepInEx, cancelAction) { downloadedBytes ->
+                        if (hash == null) true else {
+                            val expected = hash.removePrefix("sha256:").hexToByteArray()
+                            val algorithm = MessageDigest.getInstance("SHA-256")
+                            algorithm.digest(downloadedBytes).contentEquals(expected)
+                        }
+                    }
+
+                    updateState(modId, TaskState(TaskState.Phase.EXTRACTING, null, true, cancelAction), isBepInEx)
 
                     withContext(Dispatchers.IO) {
                         if (!dir.exists()) dir.mkdirs()
                         extract(bytes, url, dir, isBepInEx)
                     }
+
                     onSuccess()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    if (e is CancellationException) throw e
-                    updateState(modId, TaskState(TaskState.Phase.EXTRACTING, null, e.localizedMessage), isBepInEx)
-                } finally {
-                    clearStatus(modId, isBepInEx)
                 }
+            } catch (e: CancellationException) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    dir.deleteRecursively()
+                }
+                throw e
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(NonCancellable + Dispatchers.IO) {
+                    dir.deleteRecursively()
+                }
+            } finally {
+                clearStatus(modId, isBepInEx)
             }
         }
     }
 
-    private suspend fun downloadWithRetry(
-        parentJob: Job?,
-        url: String,
-        modId: String,
-        isBepInEx: Boolean,
-        attempts: Int = 3,
+    suspend fun downloadWithRetry(
+        modId: String, url: String, isBepInEx: Boolean,
+        cancelAction: () -> Unit, attempts: Int = 3,
+        checkHash: (ByteArray) -> Boolean,
     ): ByteArray {
-        var lastErr: Exception? = null
         repeat(attempts) { i ->
             try {
-                return NetworkClient.client.get(url) {
+                val response = NetworkClient.client.get(url) {
                     onDownload { sent, total ->
                         val p = if ((total ?: 0L) > 0) sent.toFloat() / total!! else null
-                        updateState(
-                            modId,
-                            TaskState(TaskState.Phase.DOWNLOADING, p, null, true) { parentJob?.cancel() },
-                            isBepInEx
-                        )
+                        updateState(modId, TaskState(TaskState.Phase.DOWNLOADING, p, true, cancelAction), isBepInEx)
                     }
-                }.readRawBytes()
+                }
+                val bytes = response.readRawBytes()
+
+                val isValid = withContext(Dispatchers.Default) { checkHash(bytes) }
+                if (!isValid) throw Exception("Hash mismatch for $modId")
+
+                return bytes
             } catch (e: Exception) {
-                lastErr = e
-                if (i < attempts - 1) delay(1000L * (i + 1))
+                if (e is CancellationException) throw e
+                if (i < attempts - 1) delay((1000L * (i + 1)).milliseconds)
+                else throw e
             }
         }
-        throw lastErr ?: Exception("Failed to download")
+        throw Exception("All download attempts failed")
     }
-    
-    private fun extract(bytes: ByteArray, url: String, target: File, noOverwrite: Boolean) {
-        runCatching {
-            ByteArrayStream(bytes, false).use { inStream ->
 
+    suspend fun extract(bytes: ByteArray, url: String, target: File, noOverwrite: Boolean) {
+        withContext(Dispatchers.IO) {
+            ByteArrayStream(bytes, false).use { inStream ->
                 val archive = try {
                     SevenZip.openInArchive(null, inStream)
                 } catch (_: SevenZipException) {
@@ -93,7 +112,10 @@ object Installer {
 
                 if (archive != null) {
                     archive.use { arc ->
-                        arc.simpleInterface.archiveItems.forEach { item ->
+                        val items = arc.simpleInterface.archiveItems
+                        items.forEachIndexed { _, item ->
+                            ensureActive()
+
                             val file = File(target, item.path)
                             if (item.isFolder) {
                                 file.mkdirs()
@@ -102,6 +124,8 @@ object Installer {
                                     file.parentFile?.mkdirs()
                                     FileOutputStream(file).use { out ->
                                         item.extractSlow { data ->
+                                            if (!isActive) return@extractSlow -1
+
                                             out.write(data)
                                             data.size
                                         }
@@ -111,44 +135,28 @@ object Installer {
                         }
                     }
                 } else {
+                    ensureActive()
                     val file = File(target, url.substringAfterLast("/"))
-                    if (!noOverwrite || !file.exists()) {
-                        file.parentFile?.mkdirs()
-                        file.writeBytes(bytes)
-                    }
+                    file.writeBytes(bytes)
                 }
             }
-        }.onFailure {
-            if (!noOverwrite) target.deleteRecursively()
-            throw it
         }
     }
-
-
     private fun updateState(id: String, state: TaskState, isBep: Boolean) {
-        if (isBep) {
-            bepinexStatus.value = state
-        } else {
-            installStatuses.update { it + (id to state) }
-        }
+        if (isBep) bepinexStatus.value = state
+        else installStatuses.update { it + (id to state) }
     }
 
     private fun clearStatus(id: String, isBep: Boolean) {
-        if (isBep) {
-            bepinexStatus.value = null
-        } else {
-            installStatuses.update { it - id }
-        }
-
+        if (isBep) bepinexStatus.value = null
+        else installStatuses.update { it - id }
     }
 }
-
 data class TaskState(
     val phase: Phase,
     val progress: Float? = 0f,
-    val error: String? = null,
     val isCancellable: Boolean = true,
-    private val onCancel: (() -> Unit)? = null,
+    val onCancel: (() -> Unit)? = null,
 ) {
     enum class Phase { DOWNLOADING, EXTRACTING }
 

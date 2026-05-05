@@ -46,7 +46,7 @@ fun ModDetailScreen(
         ?: SettingsManager.config.value.cachedManifest.find { it.id == modId } ?: run { onBack(); return }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(vertical = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         val backStack = rememberNavBackStack(ModNavigation.config, ModNavigation.Details)
@@ -242,7 +242,7 @@ fun ModActions(
 
                     IconButton(
                         onClick = {
-                            if (taskState.phase == TaskState.Phase.DOWNLOADING) taskState.cancel()
+                            taskState.cancel()
                         },
                         modifier = Modifier
                             .size(controlSize)
@@ -404,8 +404,8 @@ fun ModActions(
                     state = rememberTooltipState(),
                     tooltip = {
                         PlainTooltip(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ) {
                             Text("Install", style = MaterialTheme.typography.labelMedium)
                         }
@@ -753,8 +753,8 @@ fun ArtifactCard(
                         state = rememberTooltipState(),
                         tooltip = {
                             PlainTooltip(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                             ) {
                                 Text(
                                     text = "Dependencies",
