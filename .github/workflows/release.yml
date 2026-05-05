@@ -1,77 +1,144 @@
-name: Release Desktop App (Windows & Linux)
+# .github/workflows/release.yaml
+name: Release Desktop App (All Platforms)
 
 on:
   push:
-    tags: ['*']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  # STEP 1: BUILD THE FILES
   build:
     name: Build (${{ matrix.os }} / ${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, arch: amd64 }
-          - { os: windows-latest, arch: amd64 }
+          # Linux
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+
+          # Windows
+          - os: windows-latest
+            arch: amd64
+          - os: windows-11-arm
+            arch: arm64
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_VERSION: ${{ github.ref_name }}
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Normalize version for manual runs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(git describe --tags --abbrev=0)"
+          echo "RELEASE_VERSION=$tag" >> "$GITHUB_ENV"
 
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
         with:
+          jbr-version: '25.0.2b329.66'
+          packaging-tools: 'true'
+          flatpak: 'true'
+          snap: 'true'
           setup-gradle: 'true'
+          setup-node: 'true'
 
       - name: Build packages
-        run: ./gradlew packageReleaseDistributionForCurrentOS
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
 
-      - name: Upload for Publishing
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-assets-${{ runner.os }}-${{ matrix.arch }}
-          path: build/compose/binaries/**/*
-
-  # STEP 2: CREATE WINDOWS BUNDLE (Optional but recommended)
-  bundle-windows:
-    needs: [build]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: release-assets-Windows-*
-          path: artifacts
-      - uses: kdroidFilter/Nucleus/.github/actions/build-windows-appxbundle@main
-        with:
-          amd64-path: artifacts/release-assets-Windows-amd64
-          output-path: artifacts/release-assets-Windows-bundle
-
-  # STEP 3: PUBLISH TO GITHUB
+          path: |
+            build/compose/binaries/**/*.dmg
+            build/compose/binaries/**/*.pkg
+            build/compose/binaries/**/*.exe
+            build/compose/binaries/**/*.msi
+            build/compose/binaries/**/*.appx
+            build/compose/binaries/**/*.deb
+            build/compose/binaries/**/*.rpm
+            build/compose/binaries/**/*.AppImage
+            build/compose/binaries/**/*.snap
+            build/compose/binaries/**/*.flatpak
+            build/compose/binaries/**/*.zip
+            build/compose/binaries/**/*.tar
+            build/compose/binaries/**/*.7z
+            build/compose/binaries/**/*.blockmap
+            build/compose/binaries/**/signing-metadata.json
+            build/compose/binaries/**/packaging-metadata.json
+            !build/compose/binaries/**/app/**
+            !build/compose/binaries/**/runtime/**
+          if-no-files-found: error
+          
   publish:
-    needs: [build, bundle-windows]
+    name: Publish Release
+    needs: [ build, universal-macos, bundle-windows ]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: release-assets-*
+
+      - name: Determine version and channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          if [[ "$VERSION" == *"-alpha"* ]]; then
+            echo "CHANNEL=alpha" >> "$GITHUB_ENV"
+            echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV"
+          elif [[ "$VERSION" == *"-beta"* ]]; then
+            echo "CHANNEL=beta" >> "$GITHUB_ENV"
+            echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV"
+          else
+            echo "CHANNEL=latest" >> "$GITHUB_ENV"
+            echo "RELEASE_TYPE=release" >> "$GITHUB_ENV"
+          fi
 
       - name: Generate update YML files
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
           artifacts-path: artifacts
-          version: ${{ github.ref_name }}
-          channel: latest
+          version: ${{ env.VERSION }}
+          channel: ${{ env.CHANNEL }}
 
       - name: Publish release
         uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
         with:
           artifacts-path: artifacts
-          tag: ${{ github.ref_name }}
+          tag: ${{ env.TAG }}
+          release-type: ${{ env.RELEASE_TYPE }}
+          
+          
