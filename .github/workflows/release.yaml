@@ -1,4 +1,4 @@
-name: Build and Release (Full Formats)
+name: Build and Release (Final)
 on:
   push:
     tags:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }} Formats
+    name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -21,21 +21,11 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Nucleus Environment
+      - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
 
-      - name: Install Linux Packaging Tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-
       - name: Build All Formats
-        shell: bash
         run: |
           chmod +x gradlew
           ./gradlew packageReleaseDistributionForCurrentOS
@@ -46,91 +36,72 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-artifacts-${{ matrix.os }}
-          # PRECISION: We explicitly target the distribution folders.
-          # This avoids grabbing the 'app' folder which contains the loose java.exe.
+          # THE FIX: We explicitly list the subfolders. 
+          # This avoids "main-release/app/", which is where java.exe lives.
           path: |
             **/build/compose/binaries/main-release/msi/*.msi
             **/build/compose/binaries/main-release/exe/*.exe
+            **/build/compose/binaries/main-release/portable/*.exe
             **/build/compose/binaries/main-release/deb/*.deb
             **/build/compose/binaries/main-release/rpm/*.rpm
             **/build/compose/binaries/main-release/zip/*.zip
             **/build/compose/binaries/main-release/appimage/*.AppImage
             **/build/compose/binaries/main-release/flatpak/*.flatpak
           if-no-files-found: warn
-          retention-days: 1
 
   publish:
-    name: Publish GitHub Release
+    name: Publish Release
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Download All Artifacts
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: downloaded-files
           pattern: app-artifacts-*
-          merge-multiple: false
 
-      - name: Flatten and Prepare Assets
+      - name: Flatten and Sort
         run: |
           mkdir -p final-assets
-          
-          # 1. Grab only the actual binary/installer files. 
-          # This filter is strict to prevent java.exe or dlls from leaking in.
-          find downloaded-files -type f \( \
-            -name "*.msi" -o \
-            -name "*.exe" -o \
-            -name "*.zip" -o \
-            -name "*.deb" -o \
-            -name "*.rpm" -o \
-            -name "*.flatpak" -o \
-            -name "*.AppImage" \
-          \) -exec cp -v {} final-assets/ \;
-
-          # 2. Setup folders for Nucleus metadata generator
           mkdir -p temp-metadata/release-assets-Windows
           mkdir -p temp-metadata/release-assets-Linux
           
-          # 3. Sort files into the metadata folders
-          # Windows assets
+          # 1. Move everything to the flat final-assets folder
+          find downloaded-files -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" \) -exec cp -v {} final-assets/ \;
+
+          # 2. Feed the Nucleus Generator (Windows)
           cp final-assets/*.msi temp-metadata/release-assets-Windows/ 2>/dev/null || true
           cp final-assets/*win*.exe temp-metadata/release-assets-Windows/ 2>/dev/null || true
           cp final-assets/*win*.zip temp-metadata/release-assets-Windows/ 2>/dev/null || true
           
-          # Linux assets
+          # 3. Feed the Nucleus Generator (Linux)
           cp final-assets/*.deb temp-metadata/release-assets-Linux/ 2>/dev/null || true
           cp final-assets/*.rpm temp-metadata/release-assets-Linux/ 2>/dev/null || true
           cp final-assets/*.AppImage temp-metadata/release-assets-Linux/ 2>/dev/null || true
           cp final-assets/*.flatpak temp-metadata/release-assets-Linux/ 2>/dev/null || true
           cp final-assets/*linux*.zip temp-metadata/release-assets-Linux/ 2>/dev/null || true
 
-      - name: Generate Auto-Update Metadata
+      - name: Generate Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
           artifacts-path: temp-metadata
           version: ${{ github.ref_name }}
 
-      - name: Finalize Assets
+      - name: Final Cleanup
         run: |
-          # Move generated YMLs to the release root
           if [ -d "temp-metadata/update-yml" ]; then
             mv temp-metadata/update-yml/*.yml final-assets/
           fi
-          # Delete the temp structure
           rm -rf temp-metadata
-          
-          echo "--- Final Release Assets ---"
-          ls -F final-assets
+          ls -R final-assets
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
           files: final-assets/*
           tag_name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
