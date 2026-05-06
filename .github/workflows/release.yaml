@@ -3,8 +3,8 @@ name: Build and Release (Windows & Linux)
 on:
   push:
     tags:
-      - '*' # Triggers on any tag pushed
-  workflow_dispatch: # Allows manual trigger
+      - '*' # Triggers on any tag (e.g., 1.0.0, v2.0, beta)
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -44,11 +44,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Robust Upload: We use a wildcard at the start to ensure we catch 
+      # the project name even if it's not named 'composeApp'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-artifacts-${{ matrix.os }}
-          path: composeApp/build/compose/binaries/main-release/**/*
+          path: "**/build/compose/binaries/main-release/**/*"
+          if-no-files-found: error # This will make the BUILD job fail if files are missing
           retention-days: 1
 
   publish:
@@ -59,26 +62,27 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Download Windows Artifacts
+      - name: Create Work Directory
+        run: mkdir -p all-artifacts
+
+      # Download into subfolders to avoid any naming collisions
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: app-artifacts-windows-latest
-          path: build-artifacts/windows
+          path: downloaded-files
+          pattern: app-artifacts-*
+          merge-multiple: false
 
-      - name: Download Linux Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: app-artifacts-ubuntu-latest
-          path: build-artifacts/linux
-
-      # This step moves files out of OS-specific subfolders into a single directory.
-      # This is critical for generate-update-yml to produce both latest.yml and latest-linux.yml.
-      - name: Flatten Artifacts
+      # Improved Flattening Script: Moves every file from any depth 
+      # inside 'downloaded-files' into one flat 'final-assets' folder.
+      - name: Flatten and Prepare Assets
         run: |
           mkdir -p final-assets
-          find build-artifacts -type f -exec cp {} final-assets/ \;
-          ls -R final-assets # Debugging line to verify files in logs
+          find downloaded-files -type f -exec cp -v {} final-assets/ \;
+          echo "Final asset list:"
+          ls final-assets
 
+      # Re-generates metadata based on the COMPLETE set of binaries
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
