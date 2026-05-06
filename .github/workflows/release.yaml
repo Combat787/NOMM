@@ -42,11 +42,11 @@ jobs:
         shell: bash
         run: ./gradlew packageReleaseDistributionForCurrentOS
 
-      # Artifact name MUST match release-assets-{OS}-{arch} for Nucleus actions
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets-${{ runner.os }}-${{ matrix.arch }}
+          # Name pattern corrected to match the "publish" job's download pattern
+          name: release-assets-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             **/build/compose/binaries/**/*.exe
             **/build/compose/binaries/**/*.msi
@@ -55,8 +55,8 @@ jobs:
             **/build/compose/binaries/**/*.rpm
             **/build/compose/binaries/**/*.flatpak
             **/build/compose/binaries/**/*.AppImage
-            !**/build/compose/binaries/**/app/**
-            !**/build/compose/binaries/**/runtime/**
+            !**/build/compose/binaries/**/app/**/*
+            !**/build/compose/binaries/**/runtime/**/*
           if-no-files-found: error
           retention-days: 1
 
@@ -75,8 +75,10 @@ jobs:
         with:
           path: artifacts
           pattern: release-assets-*
+          merge-multiple: false
 
       - name: Determine version
+        id: info
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
@@ -98,6 +100,7 @@ jobs:
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
+          # Nucleus expects the folder containing the downloaded artifacts
           artifacts-path: artifacts
           version: ${{ env.VERSION }}
           channel: ${{ env.CHANNEL }}

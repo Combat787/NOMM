@@ -19,13 +19,14 @@ import io.github.kdroidfilter.nucleus.aot.runtime.AotRuntime
 import io.github.kdroidfilter.nucleus.darkmodedetector.isSystemInDarkMode
 import io.github.kdroidfilter.nucleus.window.material.MaterialDecoratedWindow
 import io.github.kdroidfilter.nucleus.window.material.MaterialTitleBar
-import net.sf.sevenzipjbinding.SevenZip
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
 import kotlin.system.exitProcess
 
+
 val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState provided") }
+
 
 fun main() {
     if (AotRuntime.isTraining()) {
@@ -37,19 +38,26 @@ fun main() {
             start()
         }
     }
+
     application {
-        SevenZip.initSevenZipFromPlatformJAR()
+
+        initializeSevenZipNative()
+        val configuration by SettingsManager.config
 
 
-        val currentConfig by SettingsManager.config
-
-        val useDarkTheme = when (currentConfig.theme) {
+        val useDarkTheme = when (
+            configuration.theme) {
             Theme.DARK -> true
             Theme.LIGHT -> false
             else -> isSystemInDarkMode()
         }
         val windowState = rememberWindowState()
-        NOMMTheme(currentConfig.themeColor, useDarkTheme, currentConfig.paletteStyle, currentConfig.contrast) {
+
+        NOMMTheme(
+            configuration.themeColor, useDarkTheme,
+            configuration.paletteStyle,
+            configuration.contrast
+        ) {
             MaterialDecoratedWindow(
                 onCloseRequest = ::exitApplication,
                 title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",
@@ -60,15 +68,8 @@ fun main() {
                 MaterialTitleBar(
                     backgroundContent = {
                         Column {
-                            Box(
-                                Modifier
-                                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                                    .fillMaxSize()
-                            )
-                            HorizontalDivider(
-                                modifier = Modifier.fillMaxWidth(),
-                                thickness = Dp.Hairline,
-                            )
+                            Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainer).fillMaxSize())
+                            HorizontalDivider(modifier = Modifier.fillMaxWidth(), thickness = Dp.Hairline)
                         }
                     }
                 ) {
@@ -84,7 +85,6 @@ fun main() {
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-
                 }
 
                 CompositionLocalProvider(LocalWindowState provides windowState) {
@@ -93,7 +93,6 @@ fun main() {
                     }
                 }
             }
-
         }
     }
 }

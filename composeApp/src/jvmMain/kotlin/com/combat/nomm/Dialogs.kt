@@ -1,21 +1,26 @@
 package com.combat.nomm
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.nucleus.updater.NucleusUpdater
 import io.github.kdroidfilter.nucleus.updater.UpdateEvent
 import io.github.kdroidfilter.nucleus.updater.UpdateInfo
 import io.github.kdroidfilter.nucleus.updater.UpdateResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.awt.datatransfer.StringSelection
 
@@ -94,6 +99,7 @@ fun Dialogs() {
     }
 }
 
+
 suspend fun checkForUpdate() {
     val result = updater.checkForUpdates()
     if (result is UpdateResult.Available) {
@@ -107,13 +113,15 @@ fun UpdateDialog(
     updater: NucleusUpdater,
     onDismiss: () -> Unit,
 ) {
-    var progress by remember { mutableStateOf(0.0) }
+    var progress by remember { mutableDoubleStateOf(0.0) }
     var isDownloading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = {
-            if (!isDownloading) onDismiss()
+            if (!isDownloading) {
+                onDismiss()
+            }
         },
         title = {
             Text(
@@ -122,47 +130,51 @@ fun UpdateDialog(
             )
         },
         text = {
-            if (isDownloading) {
-                Spacer(Modifier.height(8.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isDownloading) {
                     LinearProgressIndicator(
                         progress = { (progress / 100.0).toFloat() },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
                         strokeCap = StrokeCap.Round
+                    )
+                    Text(
+                        text = "${progress.toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 }
             }
         },
         confirmButton = {
-            if (!isDownloading) {
-                Button(
-                    onClick = {
-                        isDownloading = true
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                updater.downloadUpdate(info).collect { downloadProgress ->
+            Button(
+                enabled = !isDownloading,
+                onClick = {
+                    isDownloading = true
+                    scope.launch {
+                        try {
+                            updater.downloadUpdate(info)
+                                .flowOn(Dispatchers.IO)
+                                .collect { downloadProgress ->
                                     progress = downloadProgress.percent
 
                                     downloadProgress.file?.let { installerFile ->
                                         updater.installAndRestart(installerFile)
                                     }
                                 }
-                            } catch (_: Exception) {
-                                isDownloading = false
-                            }
+                        } catch (_: Exception) {
+                            isDownloading = false
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text("Download & Install")
+                    }
                 }
+            ) {
+                Text(if (isDownloading) "Downloading..." else "Download & Install")
             }
         },
         dismissButton = {
             if (!isDownloading) {
-                TextButton(onClick = onDismiss) {
+                TextButton(onClick = {
+                    onDismiss()
+                }) {
                     Text("Later")
                 }
             }

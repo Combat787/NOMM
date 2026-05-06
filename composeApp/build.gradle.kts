@@ -15,7 +15,7 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.2.0"
+val appVersion = "4.3.0"
 
 java {
     toolchain {
@@ -80,9 +80,9 @@ buildkonfig {
 
 nucleus.application {
     mainClass = "com.combat.nomm.MainKt"
-    jvmArgs += "--enable-native-access=ALL-UNNAMED"
-
-    
+    jvmArgs += listOf(
+        "--enable-native-access=ALL-UNNAMED",
+    )
     
     val authorEmail = "787combat787@gmail.com"
     nativeDistributions {
@@ -90,11 +90,17 @@ nucleus.application {
             TargetFormat.Portable,
             TargetFormat.AppImage,
             TargetFormat.Msi,
-            TargetFormat.Dmg,
             TargetFormat.Rpm,
             TargetFormat.Deb,
             TargetFormat.Flatpak,
             TargetFormat.Zip
+        )
+
+        modules(
+            "java.management",
+            "java.desktop",
+            "java.naming",
+            "jdk.unsupported"
         )
 
         appName = "Nuclear Option Mod Manager"
