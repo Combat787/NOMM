@@ -15,7 +15,7 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.1.0"
+val appVersion = "4.2.0"
 
 java {
     toolchain {
@@ -126,7 +126,7 @@ nucleus.application {
         
         linux {
             shortcut = true
-            packageName = "Nuclear Option Mod Manager"
+            packageName = "NOMM"
             appCategory = "Utility"
             debMaintainer = "Combat <${authorEmail}>"
             iconFile.set(project.file("icons/icon.png"))
