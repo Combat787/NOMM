@@ -1,4 +1,4 @@
-name: Build and Release (Final)
+name: Build and Release (Complete Suite)
 on:
   push:
     tags:
@@ -25,7 +25,14 @@ jobs:
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
 
-      - name: Build All Formats
+      - name: Install Linux Packaging Tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Build
         run: |
           chmod +x gradlew
           ./gradlew packageReleaseDistributionForCurrentOS
@@ -36,17 +43,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-artifacts-${{ matrix.os }}
-          # THE FIX: We explicitly list the subfolders. 
-          # This avoids "main-release/app/", which is where java.exe lives.
+          # THE ULTIMATE PATH FIX:
+          # We grab everything in the 'binaries/main-release' directory 
+          # BUT we explicitly exclude the 'app' directory where java.exe lives.
           path: |
-            **/build/compose/binaries/main-release/msi/*.msi
-            **/build/compose/binaries/main-release/exe/*.exe
-            **/build/compose/binaries/main-release/portable/*.exe
-            **/build/compose/binaries/main-release/deb/*.deb
-            **/build/compose/binaries/main-release/rpm/*.rpm
-            **/build/compose/binaries/main-release/zip/*.zip
-            **/build/compose/binaries/main-release/appimage/*.AppImage
-            **/build/compose/binaries/main-release/flatpak/*.flatpak
+            **/build/compose/binaries/main-release/*/*
+            !**/build/compose/binaries/main-release/app/**
           if-no-files-found: warn
 
   publish:
@@ -69,15 +71,23 @@ jobs:
           mkdir -p temp-metadata/release-assets-Windows
           mkdir -p temp-metadata/release-assets-Linux
           
-          # 1. Move everything to the flat final-assets folder
-          find downloaded-files -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" \) -exec cp -v {} final-assets/ \;
+          # 1. Collect all installers/binaries
+          find downloaded-files -type f \( \
+            -name "*.msi" -o \
+            -name "*.exe" -o \
+            -name "*.zip" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.flatpak" -o \
+            -name "*.AppImage" \
+          \) -exec cp -v {} final-assets/ \;
 
-          # 2. Feed the Nucleus Generator (Windows)
+          # 2. Feed Windows Metadata (MSI, Portable EXE, Win ZIP)
           cp final-assets/*.msi temp-metadata/release-assets-Windows/ 2>/dev/null || true
           cp final-assets/*win*.exe temp-metadata/release-assets-Windows/ 2>/dev/null || true
           cp final-assets/*win*.zip temp-metadata/release-assets-Windows/ 2>/dev/null || true
           
-          # 3. Feed the Nucleus Generator (Linux)
+          # 3. Feed Linux Metadata (DEB, RPM, AppImage, Flatpak, Linux ZIP)
           cp final-assets/*.deb temp-metadata/release-assets-Linux/ 2>/dev/null || true
           cp final-assets/*.rpm temp-metadata/release-assets-Linux/ 2>/dev/null || true
           cp final-assets/*.AppImage temp-metadata/release-assets-Linux/ 2>/dev/null || true
@@ -90,13 +100,12 @@ jobs:
           artifacts-path: temp-metadata
           version: ${{ github.ref_name }}
 
-      - name: Final Cleanup
+      - name: Finalize
         run: |
-          if [ -d "temp-metadata/update-yml" ]; then
-            mv temp-metadata/update-yml/*.yml final-assets/
-          fi
+          [ -d "temp-metadata/update-yml" ] && mv temp-metadata/update-yml/*.yml final-assets/
           rm -rf temp-metadata
-          ls -R final-assets
+          echo "Final asset list:"
+          ls -F final-assets
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
