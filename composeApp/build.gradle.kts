@@ -15,7 +15,7 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.0.0"
+val appVersion = "4.1.0"
 
 java {
     toolchain {
