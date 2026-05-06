@@ -82,7 +82,7 @@ nucleus.application {
     mainClass = "com.combat.nomm.MainKt"
     jvmArgs += "--enable-native-access=ALL-UNNAMED"
 
-    icons = project.file("icons")
+    
     
     val authorEmail = "787combat787@gmail.com"
     nativeDistributions {
@@ -114,6 +114,7 @@ nucleus.application {
             upgradeUuid = "fdac94b6-2774-4802-96c4-67ada2e62a57"
             menuGroup = "Combat"
             shortcut = true
+            iconFile.set(project.file("icons/icon.ico"))
             nsis {
                 runAfterFinish = true
                 deleteAppDataOnUninstall = false
@@ -128,6 +129,7 @@ nucleus.application {
             packageName = "Nuclear Option Mod Manager"
             appCategory = "Utility"
             debMaintainer = "Combat <${authorEmail}>"
+            iconFile.set(project.file("icons/icon.png"))
         }
         
         macOS {
