@@ -48,14 +48,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: app-artifacts-${{ matrix.os }}
-          # PRECISION FIX: Only upload files from specific format folders, skipping the 'app' folder
+          # Path globbing: grabs only the final installers, avoids the 'app' folder (java.exe)
           path: |
             **/build/compose/binaries/main-release/msi/*.msi
             **/build/compose/binaries/main-release/exe/*.exe
             **/build/compose/binaries/main-release/deb/*.deb
             **/build/compose/binaries/main-release/rpm/*.rpm
             **/build/compose/binaries/main-release/zip/*.zip
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 1
 
   publish:
@@ -77,47 +77,38 @@ jobs:
         run: |
           mkdir -p final-assets
           
-          # Target only specific installer extensions and exclude any internal 'runtime' or 'app' paths
-          # This prevents java.exe or generic dlls from being sucked in.
-          find downloaded-files -type f \( \
-            -name "*.msi" -o \
-            -name "*.exe" -o \
-            -name "*.zip" -o \
-            -name "*.deb" -o \
-            -name "*.rpm" -o \
-            -name "*.flatpak" -o \
-            -name "*.AppImage" \
-          \) -exec cp -v {} final-assets/ \;
+          # 1. Extract every valid installer from the downloaded artifacts into final-assets
+          find downloaded-files -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" \) -exec cp -v {} final-assets/ \;
           
-          # Setup structure for Nucleus Metadata Generator
-          mkdir -p final-assets/release-assets-Windows
-          mkdir -p final-assets/release-assets-Linux
+          # 2. Create the temporary structure Nucleus needs to generate update YMLs
+          mkdir -p temp-metadata/release-assets-Windows
+          mkdir -p temp-metadata/release-assets-Linux
           
-          # Sort files into OS folders for the generator
-          mv final-assets/*.{msi,exe} final-assets/release-assets-Windows/ 2>/dev/null || true
-          mv final-assets/*.{deb,rpm,flatpak,AppImage} final-assets/release-assets-Linux/ 2>/dev/null || true
-          # Zip files could be either; we'll copy to both or handle specifically if needed
-          cp final-assets/*.zip final-assets/release-assets-Windows/ 2>/dev/null || true
-          cp final-assets/*.zip final-assets/release-assets-Linux/ 2>/dev/null || true
+          # 3. Copy files to the metadata folders (using cp so original stays in final-assets)
+          # We use patterns to ensure Windows stays with Windows and Linux with Linux
+          cp final-assets/*win* temp-metadata/release-assets-Windows/ 2>/dev/null || true
+          cp final-assets/*linux* temp-metadata/release-assets-Linux/ 2>/dev/null || true
+          cp final-assets/*amd64* temp-metadata/release-assets-Linux/ 2>/dev/null || true
+          cp final-assets/*x86_64* temp-metadata/release-assets-Linux/ 2>/dev/null || true
 
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
-          artifacts-path: final-assets
+          artifacts-path: temp-metadata
           version: ${{ github.ref_name }}
 
-      - name: Move Metadata to Root
+      - name: Move Metadata and Cleanup
         run: |
-          if [ -d "final-assets/update-yml" ]; then
-            mv final-assets/update-yml/*.yml final-assets/
+          # Move the generated YMLs into the final-assets folder
+          if [ -d "temp-metadata/update-yml" ]; then
+            mv temp-metadata/update-yml/*.yml final-assets/
           fi
-          # Clean up temporary structuring folders
-          rm -rf final-assets/release-assets-Windows
-          rm -rf final-assets/release-assets-Linux
-          rm -rf final-assets/update-yml
           
-          echo "--- Final Assets List ---"
-          ls -R final-assets
+          # Clean up the temp processing folder
+          rm -rf temp-metadata
+          
+          echo "--- Content of final-assets to be released ---"
+          ls -F final-assets
 
       - name: Publish Release
         uses: softprops/action-gh-release@v3
