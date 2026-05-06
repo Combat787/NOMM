@@ -81,6 +81,8 @@ buildkonfig {
 nucleus.application {
     mainClass = "com.combat.nomm.MainKt"
     jvmArgs += "--enable-native-access=ALL-UNNAMED"
+
+    icons = project.file("icons")
     
     val authorEmail = "787combat787@gmail.com"
     nativeDistributions {
