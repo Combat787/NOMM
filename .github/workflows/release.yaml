@@ -1,8 +1,8 @@
 name: Build and Release (Windows & Linux)
-
 on:
   push:
-    tags: ['*']
+    tags:
+      - '*'
   workflow_dispatch:
 
 permissions:
@@ -10,29 +10,29 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build ${{ matrix.os }} Formats
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            arch: amd64
           - os: ubuntu-latest
-            arch: amd64
-
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_VERSION: ${{ github.ref_name }}
-
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Nucleus Environment
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
+
+      - name: Install Linux Packaging Tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Make Gradlew Executable
         shell: bash
@@ -41,77 +41,90 @@ jobs:
       - name: Build All Formats
         shell: bash
         run: ./gradlew packageReleaseDistributionForCurrentOS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: release-assets-${{ matrix.os }}-${{ matrix.arch }}
+          name: app-artifacts-${{ matrix.os }}
+          # PRECISION FIX: Only upload files from specific format folders, skipping the 'app' folder
           path: |
-            **/build/compose/binaries/**/*.exe
-            **/build/compose/binaries/**/*.msi
-            **/build/compose/binaries/**/*.zip
-            **/build/compose/binaries/**/*.deb
-            **/build/compose/binaries/**/*.rpm
-            **/build/compose/binaries/**/*.flatpak
-            **/build/compose/binaries/**/*.AppImage
-            !**/build/compose/binaries/**/app/**/*
-            !**/build/compose/binaries/**/runtime/**/*
-          if-no-files-found: error
+            **/build/compose/binaries/main-release/msi/*.msi
+            **/build/compose/binaries/main-release/exe/*.exe
+            **/build/compose/binaries/main-release/deb/*.deb
+            **/build/compose/binaries/main-release/rpm/*.rpm
+            **/build/compose/binaries/main-release/zip/*.zip
+          if-no-files-found: warn
           retention-days: 1
 
   publish:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
-
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     steps:
-      # Fix: Added checkout to provide Git context for the Nucleus publish action
       - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v6
 
       - name: Download All Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          path: artifacts
-          pattern: release-assets-*
+          path: downloaded-files
+          pattern: app-artifacts-*
           merge-multiple: false
 
-      - name: Determine version
-        id: info
-        shell: bash
+      - name: Flatten and Prepare Assets
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
-          if [[ "$VERSION" == *"-alpha"* ]]; then
-            echo "CHANNEL=alpha" >> "$GITHUB_ENV"
-            echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV"
-          elif [[ "$VERSION" == *"-beta"* ]]; then
-            echo "CHANNEL=beta" >> "$GITHUB_ENV"
-            echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV"
-          else
-            echo "CHANNEL=latest" >> "$GITHUB_ENV"
-            echo "RELEASE_TYPE=release" >> "$GITHUB_ENV"
-          fi
+          mkdir -p final-assets
+          
+          # Target only specific installer extensions and exclude any internal 'runtime' or 'app' paths
+          # This prevents java.exe or generic dlls from being sucked in.
+          find downloaded-files -type f \( \
+            -name "*.msi" -o \
+            -name "*.exe" -o \
+            -name "*.zip" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.flatpak" -o \
+            -name "*.AppImage" \
+          \) -exec cp -v {} final-assets/ \;
+          
+          # Setup structure for Nucleus Metadata Generator
+          mkdir -p final-assets/release-assets-Windows
+          mkdir -p final-assets/release-assets-Linux
+          
+          # Sort files into OS folders for the generator
+          mv final-assets/*.{msi,exe} final-assets/release-assets-Windows/ 2>/dev/null || true
+          mv final-assets/*.{deb,rpm,flatpak,AppImage} final-assets/release-assets-Linux/ 2>/dev/null || true
+          # Zip files could be either; we'll copy to both or handle specifically if needed
+          cp final-assets/*.zip final-assets/release-assets-Windows/ 2>/dev/null || true
+          cp final-assets/*.zip final-assets/release-assets-Linux/ 2>/dev/null || true
 
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
-          artifacts-path: artifacts
-          version: ${{ env.VERSION }}
-          channel: ${{ env.CHANNEL }}
+          artifacts-path: final-assets
+          version: ${{ github.ref_name }}
+
+      - name: Move Metadata to Root
+        run: |
+          if [ -d "final-assets/update-yml" ]; then
+            mv final-assets/update-yml/*.yml final-assets/
+          fi
+          # Clean up temporary structuring folders
+          rm -rf final-assets/release-assets-Windows
+          rm -rf final-assets/release-assets-Linux
+          rm -rf final-assets/update-yml
+          
+          echo "--- Final Assets List ---"
+          ls -R final-assets
 
       - name: Publish Release
-        uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
+        uses: softprops/action-gh-release@v3
         with:
-          artifacts-path: artifacts
-          tag: ${{ env.TAG }}
-          release-type: ${{ env.RELEASE_TYPE }}
+          files: final-assets/*
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
