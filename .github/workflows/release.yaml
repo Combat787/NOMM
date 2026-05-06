@@ -2,8 +2,7 @@ name: Build and Release (Windows & Linux)
 
 on:
   push:
-    tags:
-      - '*' # Triggers on any tag (e.g., 4.2.0, v1.0.0)
+    tags: ['*']
   workflow_dispatch:
 
 permissions:
@@ -11,30 +10,29 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }} Formats
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
+            arch: amd64
           - os: ubuntu-latest
+            arch: amd64
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_VERSION: ${{ github.ref_name }}
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Nucleus Environment
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
-
-      - name: Install Linux Packaging Tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Make Gradlew Executable
         shell: bash
@@ -43,74 +41,70 @@ jobs:
       - name: Build All Formats
         shell: bash
         run: ./gradlew packageReleaseDistributionForCurrentOS
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Artifact name MUST match release-assets-{OS}-{arch} for Nucleus actions
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: app-artifacts-${{ matrix.os }}
-          path: "**/build/compose/binaries/main-release/**/*"
+          name: release-assets-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            **/build/compose/binaries/**/*.exe
+            **/build/compose/binaries/**/*.msi
+            **/build/compose/binaries/**/*.zip
+            **/build/compose/binaries/**/*.deb
+            **/build/compose/binaries/**/*.rpm
+            **/build/compose/binaries/**/*.flatpak
+            **/build/compose/binaries/**/*.AppImage
+            !**/build/compose/binaries/**/app/**
+            !**/build/compose/binaries/**/runtime/**
           if-no-files-found: error
           retention-days: 1
+
   publish:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v6
-  
       - name: Download All Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
-          path: downloaded-files
-          pattern: app-artifacts-*
-          merge-multiple: false
-  
-      - name: Flatten and Prepare Assets
+          path: artifacts
+          pattern: release-assets-*
+
+      - name: Determine version
+        shell: bash
         run: |
-          mkdir -p final-assets
-          # Find all binaries and move them to the root of final-assets
-          find downloaded-files -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" \) -exec cp -v {} final-assets/ \;
-          
-          # CRITICAL FIX: The Nucleus metadata action expects a specific structure.
-          # Since we flattened it, we will move the files into a structure it understands
-          # so it actually generates the YMLs.
-          mkdir -p final-assets/release-assets-Windows
-          mkdir -p final-assets/release-assets-Linux
-          
-          # Copy windows files to windows folder, linux to linux for the generator
-          cp final-assets/*win* final-assets/release-assets-Windows/ 2>/dev/null || true
-          cp final-assets/*linux* final-assets/release-assets-Linux/ 2>/dev/null || true
-          cp final-assets/*amd64* final-assets/release-assets-Linux/ 2>/dev/null || true
-  
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          if [[ "$VERSION" == *"-alpha"* ]]; then
+            echo "CHANNEL=alpha" >> "$GITHUB_ENV"
+            echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV"
+          elif [[ "$VERSION" == *"-beta"* ]]; then
+            echo "CHANNEL=beta" >> "$GITHUB_ENV"
+            echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV"
+          else
+            echo "CHANNEL=latest" >> "$GITHUB_ENV"
+            echo "RELEASE_TYPE=release" >> "$GITHUB_ENV"
+          fi
+
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
-          artifacts-path: final-assets
-          version: ${{ github.ref_name }}
-  
-      - name: Move Metadata to Root
-        run: |
-          # Move the generated YMLs from the subfolder back to the root of final-assets
-          if [ -d "final-assets/update-yml" ]; then
-            mv final-assets/update-yml/*.yml final-assets/
-          fi
-          # Clean up the dummy folders so they aren't uploaded
-          rm -rf final-assets/release-assets-Windows
-          rm -rf final-assets/release-assets-Linux
-          rm -rf final-assets/update-yml
-          
-          echo "--- Final Assets to be Uploaded ---"
-          ls -F final-assets
-  
+          artifacts-path: artifacts
+          version: ${{ env.VERSION }}
+          channel: ${{ env.CHANNEL }}
+
       - name: Publish Release
-        uses: softprops/action-gh-release@v3
+        uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
         with:
-          files: final-assets/*
-          tag_name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          artifacts-path: artifacts
+          tag: ${{ env.TAG }}
+          release-type: ${{ env.RELEASE_TYPE }}
