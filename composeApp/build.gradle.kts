@@ -102,7 +102,9 @@ nucleus.application {
         packageVersion = appVersion
         vendor = "Combat"
         description = "A Mod Manager For Nuclear Option"
-
+        
+        artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
+        
         cleanupNativeLibs = true
         enableAotCache = true
         
@@ -137,7 +139,7 @@ nucleus.application {
         }
 
         publish {
-            publishMode = PublishMode.Auto
+            publishMode = PublishMode.Never
             github {
                 enabled = true
                 owner = "Combat787"

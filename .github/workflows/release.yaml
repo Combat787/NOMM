@@ -3,7 +3,7 @@ name: Build and Release (Windows & Linux)
 on:
   push:
     tags:
-      - '*' # Triggers on any tag (e.g., 1.0.0, v2.0, beta)
+      - '*' # Triggers on any tag (e.g., 4.2.0, v1.0.0)
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -37,21 +37,21 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Make Gradlew Executable
+        shell: bash
         run: chmod +x gradlew
 
       - name: Build All Formats
+        shell: bash
         run: ./gradlew packageReleaseDistributionForCurrentOS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Robust Upload: We use a wildcard at the start to ensure we catch 
-      # the project name even if it's not named 'composeApp'
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-artifacts-${{ matrix.os }}
           path: "**/build/compose/binaries/main-release/**/*"
-          if-no-files-found: error # This will make the BUILD job fail if files are missing
+          if-no-files-found: error
           retention-days: 1
 
   publish:
@@ -60,33 +60,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Create Work Directory
-        run: mkdir -p all-artifacts
-
-      # Download into subfolders to avoid any naming collisions
       - name: Download All Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: downloaded-files
           pattern: app-artifacts-*
           merge-multiple: false
 
-      # Improved Flattening Script: Moves every file from any depth 
-      # inside 'downloaded-files' into one flat 'final-assets' folder.
       - name: Flatten and Prepare Assets
         run: |
           mkdir -p final-assets
-          find downloaded-files -type f -exec cp -v {} final-assets/ \;
-          echo "Final asset list:"
-          ls final-assets
+          find downloaded-files -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" \) -exec cp -v {} final-assets/ \;
+          echo "--- Content of final-assets ---"
+          ls -R final-assets
 
-      # Re-generates metadata based on the COMPLETE set of binaries
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
           artifacts-path: final-assets
+          version: ${{ github.ref_name }}
 
       - name: Publish Release
         uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
