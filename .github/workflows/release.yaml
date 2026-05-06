@@ -52,7 +52,7 @@ jobs:
         with:
           name: artifacts-${{ matrix.os }}
           # Using **/* to ensure it grabs files in subfolders (msi, deb, rpm, etc.)
-          path: build/compose/binaries/main-release/**/*
+          path: composeApp/build/compose/binaries/main-release/**/*
           retention-days: 1
 
   publish:
