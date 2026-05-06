@@ -3,11 +3,11 @@ name: Build and Release (Windows & Linux)
 on:
   push:
     tags:
-      - '*' # Triggers on standard version tags (e.g., v1.0.0)
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+      - '*' # Triggers on any tag pushed
+  workflow_dispatch: # Allows manual trigger
 
 permissions:
-  contents: write # Required to create the GitHub Release
+  contents: write
 
 jobs:
   build:
@@ -26,12 +26,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. Official Nucleus Setup
       - name: Setup Nucleus Environment
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
 
-      # 2. Linux Dependencies (Only runs on Ubuntu)
-      # Fixes the Flatpak status 1 error and RPM/Deb missing tool errors
       - name: Install Linux Packaging Tools
         if: runner.os == 'Linux'
         run: |
@@ -39,18 +36,14 @@ jobs:
           sudo apt-get install -y rpm flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-      # 3. Fix Unix Permissions (Fixes Exit Code 126)
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
-      # 4. Compile & Package
       - name: Build All Formats
         run: ./gradlew packageReleaseDistributionForCurrentOS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 5. Upload Artifacts (Fixes "No files found" error)
-      # Specifically targets the composeApp subfolder used by Nucleus
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -66,33 +59,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 6. Download & Merge (Fixes missing latest.yml for Windows)
-      # Pulls both OS artifacts into the exact same folder
       - name: Download Windows Artifacts
         uses: actions/download-artifact@v4
         with:
           name: app-artifacts-windows-latest
-          path: build-artifacts
+          path: build-artifacts/windows
 
       - name: Download Linux Artifacts
         uses: actions/download-artifact@v4
         with:
           name: app-artifacts-ubuntu-latest
-          path: build-artifacts
+          path: build-artifacts/linux
 
-      # 7. Generate Auto-Update Metadata
-      # Scans build-artifacts to create latest.yml and latest-linux.yml
+      # This step moves files out of OS-specific subfolders into a single directory.
+      # This is critical for generate-update-yml to produce both latest.yml and latest-linux.yml.
+      - name: Flatten Artifacts
+        run: |
+          mkdir -p final-assets
+          find build-artifacts -type f -exec cp {} final-assets/ \;
+          ls -R final-assets # Debugging line to verify files in logs
+
       - name: Generate Auto-Update Metadata
         uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
         with:
-          artifacts-path: build-artifacts
+          artifacts-path: final-assets
 
-      # 8. Publish the Release (Fixes "Unexpected inputs" error)
       - name: Publish Release
         uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          artifacts-path: build-artifacts
-          tag: ${{ github.ref_name }} # Fixed parameter name
-          release-type: 'release'     # Fixed parameter namet
+          artifacts-path: final-assets
+          tag: ${{ github.ref_name }}
+          release-type: 'release'
