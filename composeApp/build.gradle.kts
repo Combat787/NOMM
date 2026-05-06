@@ -94,7 +94,6 @@ nucleus.application {
             TargetFormat.Rpm,
             TargetFormat.Deb,
             TargetFormat.Flatpak,
-            TargetFormat.Snap,
             TargetFormat.Zip
         )
 
