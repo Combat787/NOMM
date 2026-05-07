@@ -1,5 +1,6 @@
 package com.combat.nomm
 
+import io.github.kdroidfilter.nucleus.nativehttp.ktor.installNativeSsl
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -25,14 +26,15 @@ object NetworkClient {
             })
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = null
+            requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
             connectTimeoutMillis = 30000
             socketTimeoutMillis = 30000
         }
         install(UserAgent) {
-            agent = "Nuclear Option Mod Manager ${BuildKonfig.VERSION}"
+            agent = "NOMM/${BuildKonfig.VERSION}"
         }
         install(HttpRedirect)
+        installNativeSsl()
     }
     
 
@@ -63,7 +65,7 @@ object NetworkClient {
             } else return@runCatching null
 
             SettingsManager.updateConfig(SettingsManager.config.value.copy(manifestVersion = version))
-            if (SettingsManager.config.value.ignoreManifestVersion || SettingsManager.config.value.manifestVersion == version) {
+            if (SettingsManager.config.value.manifestVersion == version && !SettingsManager.config.value.ignoreManifestVersion) {
                 return@runCatching null
             }
             

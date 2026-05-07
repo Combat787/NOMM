@@ -15,7 +15,7 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.3.0"
+val appVersion = "4.4.0"
 
 java {
     toolchain {
@@ -46,7 +46,8 @@ kotlin {
             implementation(libs.nucleus.darkmode)
             implementation(libs.nucleus.taskbar)
             implementation(libs.nucleus.updater)
-            implementation(libs.nucleus.nativehttp)
+            implementation(libs.nucleus.native.http)
+            implementation(libs.nucleus.native.http.ktor)
             implementation(libs.nucleus.aot)
 
             implementation(libs.nucleus.notif.win)

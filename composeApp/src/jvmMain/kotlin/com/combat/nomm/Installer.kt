@@ -41,7 +41,7 @@ object Installer {
                 mutex.withLock {
 
                     val bytes = downloadWithRetry(modId, url, isBepInEx, cancelAction) { downloadedBytes ->
-                        if (hash == null) true else {
+                        if (hash == null || SettingsManager.config.value.ignoreHashMismatch) true else {
                             val expected = hash.removePrefix("sha256:").hexToByteArray()
                             val algorithm = MessageDigest.getInstance("SHA-256")
                             algorithm.digest(downloadedBytes).contentEquals(expected)

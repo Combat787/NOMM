@@ -24,6 +24,7 @@ materialKolor = "5.0.0-alpha05"
 
 
 multiplatform-nav3-ui = "1.1.0-alpha01"
+uiDesktop = "1.7.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -58,7 +59,10 @@ jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:naviga
 nucleus-core = { group = "io.github.kdroidfilter", name = "nucleus.core-runtime", version.ref = "nucleus" }
 nucleus-aot = { group = "io.github.kdroidfilter", name = "nucleus.aot-runtime", version.ref = "nucleus" }
 nucleus-updater = { group = "io.github.kdroidfilter", name = "nucleus.updater-runtime", version.ref = "nucleus" }
-nucleus-nativehttp = { group = "io.github.kdroidfilter", name = "nucleus.native-http", version.ref = "nucleus" }
+nucleus-native-http = { group = "io.github.kdroidfilter", name = "nucleus.native-http", version.ref = "nucleus" }
+
+
+nucleus-native-http-ktor = { group = "io.github.kdroidfilter", name = "nucleus.native-http-ktor", version.ref = "nucleus" }
 
 nucleus-window-jni = { group = "io.github.kdroidfilter", name = "nucleus.decorated-window-jni", version.ref = "nucleus" }
 nucleus-window-material3 = { group = "io.github.kdroidfilter", name = "nucleus.decorated-window-material3", version.ref = "nucleus" }
@@ -71,6 +75,7 @@ nucleus-energy = { group = "io.github.kdroidfilter", name = "nucleus.energy-mana
 nucleus-notif-win = { group = "io.github.kdroidfilter", name = "nucleus.notification-windows", version.ref = "nucleus" }
 nucleus-notif-mac = { group = "io.github.kdroidfilter", name = "nucleus.notification-macos", version.ref = "nucleus" }
 nucleus-notif-linux = { group = "io.github.kdroidfilter", name = "nucleus.notification-linux", version.ref = "nucleus" }
+androidx-ui-desktop = { group = "androidx.compose.ui", name = "ui-desktop", version.ref = "uiDesktop" }
 
 
 [plugins]

@@ -118,6 +118,14 @@ fun SettingsScreen() {
                         SettingsManager.updateConfig(currentConfig.copy(ignoreManifestVersion = newValue))
                     }
                 )
+                SettingsSwitchRow(
+                    label = "Ignore Hash Mismatch",
+                    subLabel = "Stops checking if the Hash of a downloaded Mod is correct.",
+                    checked = currentConfig.ignoreHashMismatch,
+                    onCheckedChange = { newValue ->
+                        SettingsManager.updateConfig(currentConfig.copy(ignoreHashMismatch = newValue))
+                    }
+                )
                 ClickableSettingsRow(
                     label = "Manifest Version",
                     subLabel = currentConfig.manifestVersion.toString(),

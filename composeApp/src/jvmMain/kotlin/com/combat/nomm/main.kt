@@ -3,9 +3,7 @@ package com.combat.nomm
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,15 +17,21 @@ import io.github.kdroidfilter.nucleus.aot.runtime.AotRuntime
 import io.github.kdroidfilter.nucleus.darkmodedetector.isSystemInDarkMode
 import io.github.kdroidfilter.nucleus.window.material.MaterialDecoratedWindow
 import io.github.kdroidfilter.nucleus.window.material.MaterialTitleBar
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.runBlocking
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
 import kotlin.system.exitProcess
+import kotlin.time.Duration.Companion.seconds
 
 
 val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState provided") }
 
 
+@OptIn(FlowPreview::class)
 fun main() {
     if (AotRuntime.isTraining()) {
         Thread({
@@ -51,7 +55,12 @@ fun main() {
             Theme.LIGHT -> false
             else -> isSystemInDarkMode()
         }
-        val windowState = rememberWindowState()
+        val windowState = rememberWindowState(
+            SettingsManager.config.value.windowState.placement,
+            SettingsManager.config.value.windowState.isMinimized,
+            SettingsManager.config.value.windowState.position,
+            SettingsManager.config.value.windowState.size,
+        )
 
         NOMMTheme(
             configuration.themeColor, useDarkTheme,
@@ -59,12 +68,26 @@ fun main() {
             configuration.contrast
         ) {
             MaterialDecoratedWindow(
-                onCloseRequest = ::exitApplication,
+                onCloseRequest = {
+                    SettingsManager.updateConfig(SettingsManager.config.value.copy(windowState = windowState))
+                    runBlocking {
+                        SettingsManager.saveToFile()
+                    }
+                    exitApplication()
+                },
                 title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",
                 icon = painterResource(Res.drawable.iconpng),
                 minimumSize = DpSize(800.dp, 600.dp),
                 state = windowState,
             ) {
+                LaunchedEffect(windowState) {
+                    snapshotFlow { windowState }
+                        .distinctUntilChanged()
+                        .debounce(2.seconds)
+                        .collect { state ->
+                            SettingsManager.updateConfig(SettingsManager.config.value.copy(windowState = state))
+                        }
+                }
                 MaterialTitleBar(
                     backgroundContent = {
                         Column {
