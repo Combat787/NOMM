@@ -53,6 +53,8 @@ data class Configuration(
 
 @OptIn(FlowPreview::class)
 object SettingsManager {
+    val saveSignal = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+
     val config: State<Configuration>
         field = mutableStateOf(load())
 
@@ -83,8 +85,6 @@ object SettingsManager {
         saveSignal.tryEmit(Unit)
         return default
     }
-
-    val saveSignal = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
 
     init {
         scope.launch(Dispatchers.IO) {
