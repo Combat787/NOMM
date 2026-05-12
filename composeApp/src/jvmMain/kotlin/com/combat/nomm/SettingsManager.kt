@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.WindowPlacement
 import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
 import io.github.kdroidfilter.nucleus.updater.UpdateInfo
@@ -44,8 +44,7 @@ data class Configuration(
     val manifestVersion: Version = Version(0),
     val cachedManifest: Manifest = emptyList(),
     val hueValue: Float = 0.3f,
-    @Serializable(with = WindowStateSerializer::class)
-    val windowState: WindowState = WindowState(),
+    val placement: WindowPlacement = WindowPlacement.Floating,
 ) {
     val themeColor: Color
         get() = Color.hsv(hueValue * 360f, 1f, 1f)

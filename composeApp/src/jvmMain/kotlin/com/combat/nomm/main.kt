@@ -1,11 +1,17 @@
 package com.combat.nomm
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragData
+import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -24,6 +30,8 @@ import kotlinx.coroutines.runBlocking
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
+import java.io.File
+import java.net.URI
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.seconds
 
@@ -31,7 +39,7 @@ import kotlin.time.Duration.Companion.seconds
 val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState provided") }
 
 
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, ExperimentalComposeUiApi::class)
 fun main() {
     if (AotRuntime.isTraining()) {
         Thread({
@@ -55,12 +63,7 @@ fun main() {
             Theme.LIGHT -> false
             else -> isSystemInDarkMode()
         }
-        val windowState = rememberWindowState(
-            SettingsManager.config.value.windowState.placement,
-            SettingsManager.config.value.windowState.isMinimized,
-            SettingsManager.config.value.windowState.position,
-            SettingsManager.config.value.windowState.size,
-        )
+        val windowState = rememberWindowState(placement = SettingsManager.config.value.placement)
 
         NOMMTheme(
             configuration.themeColor, useDarkTheme,
@@ -69,7 +72,7 @@ fun main() {
         ) {
             MaterialDecoratedWindow(
                 onCloseRequest = {
-                    SettingsManager.updateConfig(SettingsManager.config.value.copy(windowState = windowState))
+                    SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = windowState.placement))
                     runBlocking {
                         SettingsManager.saveToFile()
                     }
@@ -85,7 +88,7 @@ fun main() {
                         .distinctUntilChanged()
                         .debounce(2.seconds)
                         .collect { state ->
-                            SettingsManager.updateConfig(SettingsManager.config.value.copy(windowState = state))
+                            SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = state.placement))
                         }
                 }
                 MaterialTitleBar(
@@ -111,7 +114,24 @@ fun main() {
                 }
 
                 CompositionLocalProvider(LocalWindowState provides windowState) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
+                    
+
+                    Surface(
+                        modifier = Modifier.fillMaxSize()
+                            .dragAndDropTarget({ it.dragData() is DragData.FilesList }, remember {
+                                object : DragAndDropTarget {
+                                    override fun onDrop(event: DragAndDropEvent): Boolean {
+                                        val data = event.dragData()
+                                        if (data is DragData.FilesList) {
+                                            LocalMods.addFilesToPlugins(
+                                                data.readFiles().map { file -> File(URI(file)) })
+                                            return true
+                                        }
+                                        return false
+                                    }
+                                }
+                            })
+                    ) {
                         App()
                     }
                 }

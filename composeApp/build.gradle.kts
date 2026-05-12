@@ -15,7 +15,12 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.6.0"
+val appVersion = "4.7.0"
+
+val changelog = """
+    Readded dragging and dropping mod files into NOMM.
+    Changed how window state is managed.
+""".trimIndent()
 
 java {
     toolchain {
@@ -76,6 +81,7 @@ buildkonfig {
     packageName = "com.combat.nomm"
     defaultConfigs {
         buildConfigField(FieldSpec.Type.STRING, "VERSION", appVersion)
+        buildConfigField(FieldSpec.Type.STRING, "CHANGELOG", changelog)
     }
 }
 

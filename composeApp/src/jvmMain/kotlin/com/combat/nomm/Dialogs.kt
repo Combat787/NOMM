@@ -1,10 +1,6 @@
 package com.combat.nomm
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,10 +11,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.nucleus.updater.NucleusUpdater
-import io.github.kdroidfilter.nucleus.updater.UpdateEvent
-import io.github.kdroidfilter.nucleus.updater.UpdateInfo
-import io.github.kdroidfilter.nucleus.updater.UpdateResult
+import io.github.kdroidfilter.nucleus.updater.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -80,8 +73,12 @@ fun Dialogs() {
         postUpdateEvent = updater.consumeUpdateEvent()
 
         checkForUpdate()
+        //postUpdateEvent = UpdateEvent(
+        //    "0.0",
+        //    "1.0",
+        //    UpdateLevel.MAJOR
+        //)
     }
-
 
     SettingsManager.availableUpdateInfo?.let { info ->
         UpdateDialog(
@@ -94,6 +91,7 @@ fun Dialogs() {
     postUpdateEvent?.let { event ->
         WhatsNewDialog(
             event = event,
+            changelog = BuildKonfig.CHANGELOG,
             onDismiss = { postUpdateEvent = null }
         )
     }
@@ -183,7 +181,7 @@ fun UpdateDialog(
 }
 
 @Composable
-fun WhatsNewDialog(event: UpdateEvent, onDismiss: () -> Unit) {
+fun WhatsNewDialog(event: UpdateEvent, changelog: String, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = {
@@ -195,7 +193,12 @@ fun WhatsNewDialog(event: UpdateEvent, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.headlineSmall
             )
         },
-        text = null,
+        text = {
+            Text(
+                text = changelog,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Dismiss")
