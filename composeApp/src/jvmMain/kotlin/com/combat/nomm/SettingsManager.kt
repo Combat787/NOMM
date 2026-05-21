@@ -9,12 +9,10 @@ import androidx.compose.ui.window.WindowPlacement
 import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
 import io.github.kdroidfilter.nucleus.updater.UpdateInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
+import io.github.vinceglb.filekit.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.File
 import kotlin.time.Duration.Companion.seconds
@@ -31,6 +29,13 @@ enum class Theme {
 }
 
 @Serializable
+data class CachedManifest(
+    val version: Version = Version(0),
+    val manifest: Manifest = emptyList(),
+)
+
+
+@Serializable
 data class Configuration(
     val theme: Theme = Theme.SYSTEM,
     val gamePath: String? = "",
@@ -41,8 +46,6 @@ data class Configuration(
     val manifestVersionUrl: String = "https://kopterbuzz.github.io/NOMNOM/manifest/version.json",
     val ignoreManifestVersion: Boolean = false,
     val ignoreHashMismatch: Boolean = false,
-    val manifestVersion: Version = Version(0),
-    val cachedManifest: Manifest = emptyList(),
     val hueValue: Float = 0.3f,
     val placement: WindowPlacement = WindowPlacement.Floating,
 ) {
@@ -55,8 +58,10 @@ object SettingsManager {
     val saveSignal = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
 
     val config: State<Configuration>
-        field = mutableStateOf(load())
+        field = mutableStateOf(loadConfiguration())
 
+    val cachedManifest: State<CachedManifest>
+        field = mutableStateOf(loadCachedManifest())
 
 
     var availableUpdateInfo by mutableStateOf<UpdateInfo?>(null)
@@ -65,24 +70,30 @@ object SettingsManager {
     val bepInExFolder: File?
         get() = gameFolder?.let { File(it, "BepInEx") }
 
-
-    private fun load(): Configuration {
-        return if (DataStorage.configFile.exists() && DataStorage.configFile.length() > 0) {
+    fun loadCachedManifest(): CachedManifest = runBlocking {
+        if ((FileKit.filesDir / "manifest.json").exists()) {
             try {
-                json.decodeFromString<Configuration>(DataStorage.configFile.readText())
+                return@runBlocking json.decodeFromString<CachedManifest>((FileKit.filesDir / "manifest.json").readString())
             } catch (_: Exception) {
-                createDefaultConfig()
             }
-        } else {
-            createDefaultConfig()
         }
+        CachedManifest()
     }
 
-    private fun createDefaultConfig(): Configuration {
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun loadConfiguration(): Configuration = runBlocking {
+        if ((FileKit.filesDir / "config.json").exists()) {
+            try {
+                return@runBlocking json.decodeFromString<Configuration>((FileKit.filesDir / "config.json").readString())
+            } catch (_: Exception) {
+            }
+        }
+
         val path = getGameFolder("Nuclear Option", "NuclearOption.exe")?.path
         val default = Configuration(gamePath = path)
         saveSignal.tryEmit(Unit)
-        return default
+        default
     }
 
     init {
@@ -90,20 +101,34 @@ object SettingsManager {
             saveSignal
                 .debounce(5.seconds)
                 .collect {
-                    saveToFile()
+                    saveConfig()
                 }
         }
     }
 
+    fun updateCachedManifest(newCachedManifest: CachedManifest) {
+        cachedManifest.value = newCachedManifest
+        scope.launch {
+            saveCachedManifest()
+        }
+    }
+    
     fun updateConfig(newConfig: Configuration) {
         config.value = newConfig
         saveSignal.tryEmit(Unit)
     }
 
-    suspend fun saveToFile() {
+    suspend fun saveConfig() {
         withContext(Dispatchers.IO) {
             val currentConfig = config.value
-            DataStorage.configFile.writeText(json.encodeToString(currentConfig))
+            (FileKit.filesDir / "config.json").writeString(json.encodeToString(currentConfig))
+        }
+    }
+
+    suspend fun saveCachedManifest() {
+        withContext(Dispatchers.IO) {
+            val currentCachedManifest = cachedManifest.value
+            (FileKit.filesDir / "manifest.json").writeString(json.encodeToString(currentCachedManifest))
         }
     }
 }

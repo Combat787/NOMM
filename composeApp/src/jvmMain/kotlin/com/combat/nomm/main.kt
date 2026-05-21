@@ -23,6 +23,7 @@ import io.github.kdroidfilter.nucleus.aot.runtime.AotRuntime
 import io.github.kdroidfilter.nucleus.darkmodedetector.isSystemInDarkMode
 import io.github.kdroidfilter.nucleus.window.material.MaterialDecoratedWindow
 import io.github.kdroidfilter.nucleus.window.material.MaterialTitleBar
+import io.github.vinceglb.filekit.FileKit
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -54,6 +55,7 @@ fun main() {
     application {
 
         initializeSevenZipNative()
+        FileKit.init("NOMM")
         val configuration by SettingsManager.config
 
 
@@ -74,7 +76,8 @@ fun main() {
                 onCloseRequest = {
                     SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = windowState.placement))
                     runBlocking {
-                        SettingsManager.saveToFile()
+                        SettingsManager.saveConfig()
+                        SettingsManager.saveCachedManifest()
                     }
                     exitApplication()
                 },

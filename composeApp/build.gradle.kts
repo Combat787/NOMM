@@ -15,11 +15,12 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.7.1"
+val appVersion = "4.8.0"
 
 val changelog = """
-    Readded dragging and dropping mod files into NOMM.
-    Changed how window state is managed.
+    Updated dependencies
+    Updated internal config saving resulting in reset configs
+    Possibly fixed an issue with the file picker on certain linux installs
 """.trimIndent()
 
 java {

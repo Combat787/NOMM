@@ -1,10 +1,7 @@
 package com.combat.nomm
 
 import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.dialogs.FileKitMode
-import io.github.vinceglb.filekit.dialogs.FileKitType
-import io.github.vinceglb.filekit.dialogs.openFilePicker
-import io.github.vinceglb.filekit.dialogs.openFileSaver
+import io.github.vinceglb.filekit.dialogs.*
 import io.github.vinceglb.filekit.readString
 import io.github.vinceglb.filekit.writeString
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +38,9 @@ object LocalMods {
 
             val file = FileKit.openFileSaver(
                 suggestedName = "modpack",
-                extension = "nomm.json"
+                defaultExtension = "nomm.json",
+                directory = null,
+                dialogSettings = FileKitDialogSettings.createDefault()
             )
 
             file?.writeString(exportData)
@@ -62,7 +61,7 @@ object LocalMods {
         scope.launch {
             val files = FileKit.openFilePicker(
                 mode = FileKitMode.Multiple(),
-                title = "Add From Files",
+                dialogSettings = FileKitDialogSettings("Add From Files"),
             )
 
             if (!files.isNullOrEmpty()) {
@@ -74,7 +73,7 @@ object LocalMods {
     fun importMods() {
         scope.launch {
             val file = FileKit.openFilePicker(
-                title = "Import Modpack",
+                dialogSettings = FileKitDialogSettings("Import Modpack"),
                 type = FileKitType.File(extension = "nomm.json"),
             )
 

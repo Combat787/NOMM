@@ -28,7 +28,7 @@ object RepoMods {
                 val fetched = if (SettingsManager.config.value.fakeManifest) {
                     fetchFakeManifest()
                 } else {
-                    NetworkClient.fetchManifest() ?: SettingsManager.config.value.cachedManifest
+                    NetworkClient.fetchManifest() ?: SettingsManager.cachedManifest.value.manifest
                 }
                 mods.value = fetched.distinctBy { it.id }
             } finally {

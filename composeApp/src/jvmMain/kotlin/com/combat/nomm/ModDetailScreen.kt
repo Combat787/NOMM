@@ -43,7 +43,7 @@ fun ModDetailScreen(
     onBack: () -> Unit,
 ) {
     val mod = RepoMods.mods.collectAsState().value.find { it.id == modId }
-        ?: SettingsManager.config.value.cachedManifest.find { it.id == modId } ?: run { onBack(); return }
+        ?: SettingsManager.cachedManifest.value.manifest.find { it.id == modId } ?: run { onBack(); return }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(vertical = 16.dp),

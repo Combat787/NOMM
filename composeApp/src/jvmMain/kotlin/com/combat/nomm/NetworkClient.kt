@@ -63,14 +63,14 @@ object NetworkClient {
                 json.decodeFromString<Version>(versionResponse.bodyAsText())
             } else return@runCatching null
             println(version)
-            if (SettingsManager.config.value.manifestVersion == version && !SettingsManager.config.value.ignoreManifestVersion) {
+            if (SettingsManager.cachedManifest.value.manifest == version && !SettingsManager.config.value.ignoreManifestVersion) {
                 return@runCatching null
             }
-            SettingsManager.updateConfig(SettingsManager.config.value.copy(manifestVersion = version))
+            SettingsManager.updateCachedManifest(SettingsManager.cachedManifest.value.copy(version = version))
             val manifestResponse = client.get(SettingsManager.config.value.manifestUrl)
             if (manifestResponse.status.isSuccess()) {
                 val manifest = json.decodeFromString<Manifest>(manifestResponse.body()).distinctBy { it.id }
-                SettingsManager.updateConfig(SettingsManager.config.value.copy(cachedManifest = manifest))
+                SettingsManager.updateCachedManifest(SettingsManager.cachedManifest.value.copy(manifest = manifest))
                 manifest
             } else {
                 null

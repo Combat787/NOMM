@@ -33,7 +33,7 @@ fun LibraryScreen(
     val installedExtensions = remember(localMods) {
         localMods.values.map { modMeta ->
             RepoMods.mods.value.find { it.id == modMeta.id }
-                ?: SettingsManager.config.value.cachedManifest.find { it.id == modMeta.id } ?: Extension(
+                ?: SettingsManager.cachedManifest.value.manifest.find { it.id == modMeta.id } ?: Extension(
                     id = modMeta.id,
                     displayName = modMeta.id,
                     description = "",

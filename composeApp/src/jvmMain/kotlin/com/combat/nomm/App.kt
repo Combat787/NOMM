@@ -66,7 +66,7 @@ fun App() {
                     entry<MainNavigation.Libraries> {
                         LibraryScreen(
                             onOpenMod = { targetId ->
-                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.config.value.cachedManifest.any { it.id == targetId }) {
+                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
                                     backStack.add(MainNavigation.Mod(targetId))
                                 }
                             }
@@ -79,7 +79,7 @@ fun App() {
                         ModDetailScreen(
                             modId = nav.modName,
                             onOpenMod = { targetId ->
-                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.config.value.cachedManifest.any { it.id == targetId }) {
+                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
                                     backStack.add(MainNavigation.Mod(targetId))
                                 }
                             },

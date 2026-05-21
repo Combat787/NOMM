@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
 import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -35,13 +36,14 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 fun SettingsScreen() {
     val currentConfig by SettingsManager.config
+    val cachedManifest by SettingsManager.cachedManifest
     val uriHandler = LocalUriHandler.current
     val state = rememberScrollState()
 
     val isScrollable by remember {
         derivedStateOf { state.maxValue > 0 }
     }
-    
+
     Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(
             modifier = Modifier.fillMaxHeight().weight(1f).verticalScroll(state),
@@ -73,13 +75,13 @@ fun SettingsScreen() {
                     }
                 )
             }
-            
+
             SettingsGroup(title = "Path Configuration") {
                 ClickableSettingsRow(
                     label = "Game Folder", subLabel = currentConfig.gamePath ?: "Not Found", onClick = {
                         scope.launch {
                             val directory = FileKit.openDirectoryPicker(
-                                title = "Select Nuclear Option Folder"
+                                dialogSettings = FileKitDialogSettings("Select Nuclear Option Folder")
                             )
                             directory?.file?.path?.let { path ->
                                 val exeFile = File(path, "NuclearOption.exe")
@@ -128,9 +130,11 @@ fun SettingsScreen() {
                 )
                 ClickableSettingsRow(
                     label = "Manifest Version",
-                    subLabel = currentConfig.manifestVersion.toString(),
+                    subLabel = cachedManifest.version.toString(),
                     onClick = {
-                        SettingsManager.updateConfig(currentConfig.copy(manifestVersion = Version(0)))
+                        if (cachedManifest.version != Version(0)) {
+                            SettingsManager.updateCachedManifest(cachedManifest.copy(version = Version(0)))
+                        }
                     },
                 )
                 SettingsSwitchRow(
@@ -256,8 +260,10 @@ fun ClickableSettingsRow(label: String, subLabel: String, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape).pointerHoverIcon(PointerIcon.Hand)
     ) {
         Column(modifier = Modifier.padding(4.dp), verticalArrangement = Arrangement.Center) {
-            Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 subLabel,
                 style = MaterialTheme.typography.bodySmall,
@@ -344,8 +350,10 @@ fun SettingsColorPicker(
     }
 
     Column(modifier = Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            label, style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
 
         Box(
             modifier = Modifier.width(width).height(32.dp), contentAlignment = Alignment.CenterStart
@@ -397,8 +405,10 @@ fun SettingsSwitchRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Text(
                     subLabel,
                     style = MaterialTheme.typography.bodySmall,
@@ -426,8 +436,10 @@ fun SettingsInfoRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(infoName, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                infoName, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 infoData,
                 style = MaterialTheme.typography.bodySmall,
