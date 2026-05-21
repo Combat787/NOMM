@@ -15,7 +15,7 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.7.0"
+val appVersion = "4.7.1"
 
 val changelog = """
     Readded dragging and dropping mod files into NOMM.
@@ -104,6 +104,7 @@ nucleus.application {
         )
 
         modules(
+            "jdk.security.auth",
             "java.management",
             "java.desktop",
             "java.naming",
