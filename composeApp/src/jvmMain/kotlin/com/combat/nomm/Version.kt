@@ -10,8 +10,8 @@ import kotlinx.serialization.encoding.Encoder
 
 
 @Serializable(with = VersionSerializer::class)
-class Version(vararg components: Int) : Comparable<Version> {
-    private val parts: List<Int> = components.toList()
+class Version private constructor(private val parts: List<String>) : Comparable<Version> {
+    constructor(vararg components: Int) : this(components.map { it.toString() })
 
     override fun toString(): String = parts.joinToString(".")
 
@@ -26,15 +26,35 @@ class Version(vararg components: Int) : Comparable<Version> {
     override fun compareTo(other: Version): Int {
         val maxLength = maxOf(this.parts.size, other.parts.size)
         for (i in 0 until maxLength) {
-            val thisPart = this.parts.getOrElse(i) { 0 }
-            val otherPart = other.parts.getOrElse(i) { 0 }
-            if (thisPart != otherPart) {
-                return thisPart.compareTo(otherPart)
+            val thisPart = this.parts.getOrElse(i) { "0" }
+            val otherPart = other.parts.getOrElse(i) { "0" }
+            val comparison = comparePart(thisPart, otherPart)
+            if (comparison != 0) {
+                return comparison
             }
         }
         return 0
     }
 
+    private fun comparePart(left: String, right: String): Int {
+        val leftNumber = left.filter(Char::isDigit).toIntOrNull()
+        val rightNumber = right.filter(Char::isDigit).toIntOrNull()
+
+        return when {
+            leftNumber != null && rightNumber != null -> leftNumber.compareTo(rightNumber)
+            leftNumber != null -> 1
+            rightNumber != null -> -1
+            else -> left.compareTo(right, ignoreCase = true)
+        }
+    }
+
+    companion object {
+        fun parse(value: String): Version {
+            val parts = value.split('.')
+            require(parts.all { it.isNotEmpty() }) { "Invalid version: $value" }
+            return Version(parts)
+        }
+    }
 }
 
 object VersionSerializer : KSerializer<Version> {
@@ -46,11 +66,6 @@ object VersionSerializer : KSerializer<Version> {
     }
 
     override fun deserialize(decoder: Decoder): Version {
-        val string = decoder.decodeString()
-        val parts = string.split('.')
-            .map { it.replace("\\D+".toRegex() ,"").toInt() }
-            .toIntArray()
-
-        return Version(*parts)
+        return Version.parse(decoder.decodeString())
     }
 }
