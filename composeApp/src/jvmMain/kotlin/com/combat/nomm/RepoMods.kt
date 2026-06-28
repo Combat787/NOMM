@@ -11,7 +11,7 @@ object RepoMods {
     private val mutex = Mutex()
 
     val mods: StateFlow<List<Extension>>
-        field = MutableStateFlow<List<Extension>>(emptyList())
+        field = MutableStateFlow(emptyList())
 
     val isLoading: StateFlow<Boolean>
         field = MutableStateFlow(false)

@@ -15,12 +15,9 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.8.0"
+val appVersion = "4.9.0"
 
 val changelog = """
-    Updated dependencies
-    Updated internal config saving resulting in reset configs
-    Possibly fixed an issue with the file picker on certain linux installs
 """.trimIndent()
 
 java {
@@ -61,6 +58,7 @@ kotlin {
             implementation(libs.nucleus.notif.linux)
 
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.content.negotiation)

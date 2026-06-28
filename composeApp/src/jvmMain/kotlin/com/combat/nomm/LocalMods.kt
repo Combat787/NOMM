@@ -3,16 +3,24 @@ package com.combat.nomm
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.*
 import io.github.vinceglb.filekit.readString
+import io.github.vinceglb.filekit.write
 import io.github.vinceglb.filekit.writeString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import kotlin.time.Clock
 
 object LocalMods {
     val isBepInExInstalled: StateFlow<Boolean>
@@ -28,22 +36,43 @@ object LocalMods {
     init {
         loadInstalledModMetas()
     }
-
+    
     fun exportMods() {
         scope.launch {
-            val exportData = json.encodeToString(
-                mods.value.filter { it.value.enabled == true }
-                    .map { PackageReference(it.value.id, it.value.artifact?.version) }
-            )
+            val byteStream = ByteArrayOutputStream()
+            ZipOutputStream(byteStream).use { zipStream ->
+                val modList = json.encodeToString(
+                    mods.value.filter { it.value.enabled == true }
+                        .map { PackageReference(it.value.id, it.value.artifact?.version) }
+                )
+                zipStream.putNextEntry(ZipEntry("modlist.nomm.json"))
+                zipStream.write(modList.toByteArray())
+                zipStream.closeEntry()
+                mods.value
+                    .asSequence()
+                    .filter { it.value.enabled == true }
+                    .filter { it.value.isUnidentified }.mapNotNull { it.value.file }
+                    .filter { it.exists() }
+                    .toList()
+                    .forEach {
+                        zipStream.putNextEntry(ZipEntry("mods/${it.name}"))
+                        it.inputStream().use { fileStream ->
+                            fileStream.copyTo(zipStream)
+                        }
+                        zipStream.closeEntry()
+                    }
+            }
 
             val file = FileKit.openFileSaver(
-                suggestedName = "modpack",
-                defaultExtension = "nomm.json",
+                suggestedName = LocalDateTime.Formats.ISO.format(
+                    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                ),
+                defaultExtension = "nommpack",
                 directory = null,
                 dialogSettings = FileKitDialogSettings.createDefault()
             )
 
-            file?.writeString(exportData)
+            file?.write(byteStream.toByteArray())
         }
     }
 
