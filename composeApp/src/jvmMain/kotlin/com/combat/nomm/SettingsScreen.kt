@@ -27,6 +27,7 @@ import com.materialkolor.PaletteStyle
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
+import io.github.vinceglb.filekit.filesDir
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.awt.Desktop
@@ -128,6 +129,14 @@ fun SettingsScreen() {
                         SettingsManager.updateConfig(currentConfig.copy(ignoreHashMismatch = newValue))
                     }
                 )
+                SettingsSwitchRow(
+                    label = "Ignore Mod Updates",
+                    subLabel = "Stops notifying when new Mod Updates become available.",
+                    checked = currentConfig.ignoreNewUpdates,
+                    onCheckedChange = { newValue ->
+                        SettingsManager.updateConfig(currentConfig.copy(ignoreNewUpdates = newValue))
+                    }
+                )
                 ClickableSettingsRow(
                     label = "Manifest Version",
                     subLabel = cachedManifest.version.toString(),
@@ -197,6 +206,14 @@ fun SettingsScreen() {
                             }
                         }
                     })
+                ClickableSettingsRow(
+                    label = "Open Nuclear Option Mod Manager Data Folder",
+                    subLabel = "Click to open the Folder containing the NOMM Data.",
+                    onClick = {
+                        scope.launch {
+                            Desktop.getDesktop().open(FileKit.filesDir.file)
+                        }
+                    })
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -248,7 +265,6 @@ fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ClickableSettingsRow(label: String, subLabel: String, onClick: () -> Unit) {
     val shape = MaterialTheme.shapes.small

@@ -35,6 +35,17 @@ object RepoMods {
                 isLoading.value = false
                 mutex.unlock()
             }
+            val updatable = LocalMods.mods.value.filter { it.value.hasUpdate }
+                .mapNotNull { mods.value.find { mod -> mod.id == it.key } }
+            if (updatable.isNotEmpty() || SettingsManager.config.value.ignoreNewUpdates) {
+                SettingsManager.criticalInformation.add(
+                    Triple(
+                        "${updatable.size} Available Mod Update${if (updatable.size > 1) "s" else ""}",
+                        updatable.joinToString(separator = "\n") { it.displayName },
+                        null
+                    )
+                )
+            }
         }
     }
 
@@ -57,11 +68,13 @@ object RepoMods {
         configDir.mkdirs()
         val config = File(configDir, "BepInEx.cfg")
         config.createNewFile()
-        config.writeText("""
+        config.writeText(
+            """
             [Chainloader]
             HideManagerGameObject = true
-            """.trimIndent())
-        Installer.installMod("BepInEx", url, gameFolder,null, true) {
+            """.trimIndent()
+        )
+        Installer.installMod("BepInEx", url, gameFolder, null, true) {
             LocalMods.refresh()
         }
     }

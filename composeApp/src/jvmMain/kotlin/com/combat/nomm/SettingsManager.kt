@@ -48,6 +48,7 @@ data class Configuration(
     val manifestVersionUrl: String = "https://kopterbuzz.github.io/NOMNOM/manifest/version.json",
     val ignoreManifestVersion: Boolean = false,
     val ignoreHashMismatch: Boolean = false,
+    val ignoreNewUpdates: Boolean = false,
     val hueValue: Float = 0.3f,
     val placement: WindowPlacement = WindowPlacement.Floating,
 ) {
@@ -94,7 +95,7 @@ object SettingsManager {
         }
 
         val path = getGameFolder("Nuclear Option", "NuclearOption.exe")?.path
-        val default = Configuration(gamePath = path)
+        val default = Configuration(gamePath = path,)
         saveSignal.tryEmit(Unit)
         default
     }

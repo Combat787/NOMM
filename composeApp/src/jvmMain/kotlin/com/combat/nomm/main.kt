@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.combat.nomm.LocalMods.refresh
 import io.github.kdroidfilter.nucleus.aot.runtime.AotRuntime
 import io.github.kdroidfilter.nucleus.core.runtime.SingleInstanceManager
 import io.github.kdroidfilter.nucleus.darkmodedetector.isSystemInDarkMode
@@ -87,6 +88,9 @@ fun main(args: Array<String>) {
             if (initialFile != null && (initialFile.endsWith("nomm.json") || initialFile.endsWith("nommpack"))) {
                 LocalMods.importMods(PlatformFile(initialFile))
             }
+
+
+            refresh()
         }
         
         

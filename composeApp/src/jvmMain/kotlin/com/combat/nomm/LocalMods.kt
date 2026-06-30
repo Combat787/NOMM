@@ -2,13 +2,11 @@ package com.combat.nomm
 
 import io.github.vinceglb.filekit.*
 import io.github.vinceglb.filekit.dialogs.*
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
@@ -34,9 +32,6 @@ object LocalMods {
         field = MutableStateFlow(emptyMap())
 
 
-    init {
-        loadInstalledModMetas()
-    }
 
     fun exportMods() {
         scope.launch {
@@ -298,6 +293,7 @@ object LocalMods {
 
     fun refresh() {
         loadInstalledModMetas()
+        RepoMods.fetchManifest()
     }
 }
 
