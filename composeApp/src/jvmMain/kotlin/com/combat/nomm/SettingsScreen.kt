@@ -131,7 +131,7 @@ fun SettingsScreen() {
                 )
                 SettingsSwitchRow(
                     label = "Ignore Mod Updates",
-                    subLabel = "Stops notifying when new Mod Updates become available.",
+                    subLabel = "Stops Mod Update Notifications.",
                     checked = currentConfig.ignoreNewUpdates,
                     onCheckedChange = { newValue ->
                         SettingsManager.updateConfig(currentConfig.copy(ignoreNewUpdates = newValue))
