@@ -11,11 +11,15 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.nucleus.updater.*
+import io.github.kdroidfilter.nucleus.updater.NucleusUpdater
+import io.github.kdroidfilter.nucleus.updater.UpdateEvent
+import io.github.kdroidfilter.nucleus.updater.UpdateInfo
+import io.github.kdroidfilter.nucleus.updater.UpdateResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.awt.datatransfer.StringSelection
+import kotlin.coroutines.resume
 
 @Composable
 fun LaunchOptionDialog(onDismiss: () -> Unit, onCopy: (String) -> Unit) {
@@ -71,7 +75,15 @@ fun Dialogs() {
     LaunchedEffect(Unit) {
 
         postUpdateEvent = updater.consumeUpdateEvent()
-
+        postUpdateEvent?.let { event ->
+            SettingsManager.criticalInformation.add(
+                Triple(
+                    "Updated from ${event.previousVersion} to ${event.newVersion}",
+                    BuildKonfig.CHANGELOG,
+                    null
+                    )
+            )
+        }
         checkForUpdate()
         //postUpdateEvent = UpdateEvent(
         //    "0.0",
@@ -79,6 +91,16 @@ fun Dialogs() {
         //    UpdateLevel.MAJOR
         //)
     }
+
+
+    SettingsManager.criticalInformation.lastOrNull()?.let { (criticalInformation, additional) ->
+        CriticalDialog(criticalInformation, additional) {
+            SettingsManager.criticalInformation.removeLast().third?.resume(Unit)
+        }
+
+    }
+
+
 
     SettingsManager.availableUpdateInfo?.let { info ->
         UpdateDialog(
@@ -88,13 +110,6 @@ fun Dialogs() {
         )
     }
 
-    postUpdateEvent?.let { event ->
-        WhatsNewDialog(
-            event = event,
-            changelog = BuildKonfig.CHANGELOG,
-            onDismiss = { postUpdateEvent = null }
-        )
-    }
 }
 
 
@@ -181,7 +196,7 @@ fun UpdateDialog(
 }
 
 @Composable
-fun WhatsNewDialog(event: UpdateEvent, changelog: String, onDismiss: () -> Unit) {
+fun CriticalDialog(criticalInformation: String, additional: String, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = {
@@ -189,13 +204,13 @@ fun WhatsNewDialog(event: UpdateEvent, changelog: String, onDismiss: () -> Unit)
         },
         title = {
             Text(
-                text = "Updated from ${event.previousVersion} to ${event.newVersion}",
+                text = criticalInformation,
                 style = MaterialTheme.typography.headlineSmall
             )
         },
         text = {
             Text(
-                text = changelog,
+                text = additional,
                 style = MaterialTheme.typography.bodyLarge
             )
         },

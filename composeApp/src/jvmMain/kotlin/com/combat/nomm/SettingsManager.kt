@@ -2,6 +2,7 @@ package com.combat.nomm
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.serialization.Serializable
 import java.io.File
+import kotlin.coroutines.Continuation
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
@@ -64,6 +66,8 @@ object SettingsManager {
         field = mutableStateOf(loadCachedManifest())
 
 
+    val criticalInformation = mutableStateListOf<Triple<String, String, Continuation<Unit>?>>()
+    
     var availableUpdateInfo by mutableStateOf<UpdateInfo?>(null)
 
     val gameFolder: File? = config.value.gamePath?.let { File(it) }
@@ -81,7 +85,6 @@ object SettingsManager {
     }
 
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     fun loadConfiguration(): Configuration = runBlocking {
         if ((FileKit.filesDir / "config.json").exists()) {
             try {

@@ -18,6 +18,8 @@ plugins {
 val appVersion = "4.9.0"
 
 val changelog = """
+    Changed Modpacks to a new custom Format that supports Files that are not on NOMNOM (nomm.json is still supported)
+    .nommpack Files can also be opened directly in NOMM which will then automatically import the Modpack
 """.trimIndent()
 
 java {
@@ -124,7 +126,14 @@ nucleus.application {
         homepage = "https://github.com/Combat787/NOMM"
         
         compressionLevel = CompressionLevel.Normal
-
+        fileAssociation(
+            mimeType = "application/nommpack",
+            extension = "nommpack",
+            description = "A Modpack for the Nuclear Option Mod Manager",
+            linuxIconFile = project.file("icons/icon.png"),
+            windowsIconFile = project.file("icons/icon.ico"),
+            macOSIconFile = project.file("icons/icon.icns"),
+        )
         windows {
             upgradeUuid = "fdac94b6-2774-4802-96c4-67ada2e62a57"
             menuGroup = "Combat"

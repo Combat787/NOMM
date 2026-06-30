@@ -20,10 +20,12 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import io.github.kdroidfilter.nucleus.aot.runtime.AotRuntime
+import io.github.kdroidfilter.nucleus.core.runtime.SingleInstanceManager
 import io.github.kdroidfilter.nucleus.darkmodedetector.isSystemInDarkMode
 import io.github.kdroidfilter.nucleus.window.material.MaterialDecoratedWindow
 import io.github.kdroidfilter.nucleus.window.material.MaterialTitleBar
 import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -33,6 +35,8 @@ import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
 import java.io.File
 import java.net.URI
+import kotlin.io.path.readText
+import kotlin.io.path.writeText
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.seconds
 
@@ -41,7 +45,7 @@ val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState p
 
 
 @OptIn(FlowPreview::class, ExperimentalComposeUiApi::class)
-fun main() {
+fun main(args: Array<String>) {
     if (AotRuntime.isTraining()) {
         Thread({
             Thread.sleep(45000)
@@ -53,7 +57,39 @@ fun main() {
     }
 
     application {
+        var restoreRequested by remember { mutableStateOf(false) }
 
+        val isSingle = remember {
+            SingleInstanceManager.isSingleInstance(
+                onRestoreFileCreated = {
+                    val clickedFile = args.firstOrNull()
+                    if (clickedFile != null) {
+                        this.writeText(clickedFile)
+                    }
+                },
+                onRestoreRequest = {
+                    val clickedFile = this.readText().trim()
+                    if (clickedFile.endsWith("nomm.json") || clickedFile.endsWith("nommpack")) {
+                        LocalMods.importMods(PlatformFile(clickedFile))
+                    }
+                    restoreRequested = true
+                },
+            )
+        }
+
+        if (!isSingle) {
+            exitApplication()
+            return@application
+        }
+
+        LaunchedEffect(Unit) {
+            val initialFile = args.firstOrNull()
+            if (initialFile != null && (initialFile.endsWith("nomm.json") || initialFile.endsWith("nommpack"))) {
+                LocalMods.importMods(PlatformFile(initialFile))
+            }
+        }
+        
+        
         initializeSevenZipNative()
         FileKit.init("NOMM")
         val configuration by SettingsManager.config
@@ -86,6 +122,13 @@ fun main() {
                 minimumSize = DpSize(800.dp, 600.dp),
                 state = windowState,
             ) {
+                LaunchedEffect(restoreRequested) {
+                    if (restoreRequested) {
+                        window.toFront()
+                        window.requestFocus()
+                        restoreRequested = false
+                    }
+                }
                 LaunchedEffect(windowState) {
                     snapshotFlow { windowState }
                         .distinctUntilChanged()
@@ -117,7 +160,7 @@ fun main() {
                 }
 
                 CompositionLocalProvider(LocalWindowState provides windowState) {
-                    
+
 
                     Surface(
                         modifier = Modifier.fillMaxSize()
