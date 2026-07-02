@@ -15,12 +15,10 @@ plugins {
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.9.0"
+val appVersion = "4.9.1"
 
 val changelog = """
-    Changed Modpacks to a new custom Format that supports Files that are not on NOMNOM (nomm.json is still supported)
-    .nommpack Files can also be opened directly in NOMM which will then automatically import the Modpack
-    Added Notifications for Mod Updates.
+    Fixed exporting/importing Modpacks with Local Mods that are not a single File.
 """.trimIndent()
 
 java {

@@ -44,22 +44,34 @@ object LocalMods {
                 zipStream.putNextEntry(ZipEntry("modlist.nomm.json"))
                 zipStream.write(modList.toByteArray())
                 zipStream.closeEntry()
+
                 mods.value
                     .asSequence()
                     .filter { it.value.enabled == true }
                     .filter { it.value.isUnidentified }.mapNotNull { it.value.file }
                     .filter { it.exists() }
                     .toList()
-                    .forEach {
-                        zipStream.putNextEntry(ZipEntry("mods/${it.name}"))
-                        it.inputStream().use { fileStream ->
-                            fileStream.copyTo(zipStream)
+                    .forEach { modFile ->
+                        if (modFile.isDirectory) {
+                            modFile.walkTopDown().forEach { file ->
+                                val relativePath = file.relativeTo(modFile.parentFile).path.replace('\\', '/')
+                                if (file.isDirectory) {
+                                    zipStream.putNextEntry(ZipEntry("mods/$relativePath/"))
+                                } else {
+                                    zipStream.putNextEntry(ZipEntry("mods/$relativePath"))
+                                    file.inputStream().use { fileStream -> fileStream.copyTo(zipStream) }
+                                }
+                                zipStream.closeEntry()
+                            }
+                        } else {
+                            zipStream.putNextEntry(ZipEntry("mods/${modFile.name}"))
+                            modFile.inputStream().use { fileStream -> fileStream.copyTo(zipStream) }
+                            zipStream.closeEntry()
                         }
-                        zipStream.closeEntry()
                     }
             }
             val currentInstant = Clock.System.now()
-            val dt = currentInstant.toLocalDateTime(TimeZone.UTC)
+            val dt = currentInstant.toLocalDateTime(TimeZone.currentSystemDefault())
 
             val year = dt.year
             val month = dt.month.number.toString().padStart(2, '0')
@@ -69,8 +81,7 @@ object LocalMods {
             val second = dt.second.toString().padStart(2, '0')
 
             val file = FileKit.openFileSaver(
-                suggestedName =
-                    "${year}-${month}-${day}_${hour}-${minute}-${second}",
+                suggestedName = "${year}-${month}-${day}_${hour}-${minute}-${second}",
                 defaultExtension = "nommpack",
                 directory = null,
                 dialogSettings = FileKitDialogSettings.createDefault()
@@ -113,88 +124,97 @@ object LocalMods {
             importMods(file)
         }
     }
-
+    
     fun importMods(file: PlatformFile?) {
         scope.launch {
-        file?.let { platformFile ->
-            val jsonString: String? = if (file.extension == "json") {
-                platformFile.readString()
-            } else {
-                var modlist: String? = null
+            file?.let { platformFile ->
+                val jsonString: String? = if (file.extension == "json") {
+                    platformFile.readString()
+                } else {
+                    var modlist: String? = null
+                    val warnedMods = mutableSetOf<String>()
 
-                ZipInputStream(file.readBytes().inputStream()).use { zipStream ->
-                    var entry = zipStream.nextEntry
+                    ZipInputStream(file.readBytes().inputStream()).use { zipStream ->
+                        var entry = zipStream.nextEntry
 
-                    while (entry != null) {
-                        if (!entry.isDirectory) {
+                        while (entry != null) {
                             when {
                                 entry.name.endsWith("modlist.nomm.json") -> {
-                                    modlist = zipStream.readBytes().decodeToString()
+                                    if (!entry.isDirectory) {
+                                        modlist = zipStream.readBytes().decodeToString()
+                                    }
                                 }
 
                                 entry.name.startsWith("mods/") -> {
                                     val fileName = entry.name.removePrefix("mods/")
-                                    suspendCancellableCoroutine { continuation ->
-                                        SettingsManager.criticalInformation.add(
-                                            Triple(
-                                                "Modpack includes the Local Mod $fileName",
-                                                "Make sure you can trust the Source of this Modpack and else to remove the Mod.",
-                                                continuation
-                                            )
-                                        )
-                                    }
                                     if (fileName.isNotEmpty()) {
+                                        val rootModName = fileName.substringBefore('/')
+                                        if (warnedMods.add(rootModName)) {
+                                            suspendCancellableCoroutine { continuation ->
+                                                SettingsManager.criticalInformation.add(
+                                                    Triple(
+                                                        "Modpack includes the Local Mod $rootModName",
+                                                        "Make sure you trust the source, or remove the mod to stay safe.",
+                                                        continuation
+                                                    )
+                                                )
+                                            }
+                                        }
+
                                         val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
-                                        if (!pluginsDir.exists()) pluginsDir.mkdirs()
-
                                         val destinationFile = File(pluginsDir, fileName)
+                                        
+                                        if (entry.isDirectory) {
+                                            destinationFile.mkdirs()
+                                        } else {
+                                            destinationFile.parentFile?.mkdirs()
+                                            if (destinationFile.exists()) destinationFile.delete()
 
-                                        if (destinationFile.exists()) destinationFile.delete()
-
-                                        destinationFile.outputStream().use { outStream ->
-                                            zipStream.copyTo(outStream)
+                                            destinationFile.outputStream().use { outStream ->
+                                                zipStream.copyTo(outStream)
+                                            }
                                         }
                                     }
                                 }
                             }
+                            entry = zipStream.nextEntry
                         }
-                        entry = zipStream.nextEntry
                     }
-                }
-                refresh()
-                modlist ?: run {
-                    suspendCancellableCoroutine { continuation ->
-                        SettingsManager.criticalInformation.add(
-                            Triple(
-                                "Modpack does not include a Modlist.",
-                                "Local Mods from the Modpack have been added.",
-                                continuation
+                    refresh()
+                    modlist ?: run {
+                        suspendCancellableCoroutine { continuation ->
+                            SettingsManager.criticalInformation.add(
+                                Triple(
+                                    "Modpack does not include a Modlist.",
+                                    "Local Mods from the Modpack have been added.",
+                                    continuation
+                                )
                             )
-                        )
+                        }
+                        null
                     }
-                    null
                 }
-            }
 
-            val imported = jsonString?.let { json.decodeFromString<List<PackageReference>>(it) }
+                val imported = jsonString?.let { json.decodeFromString<List<PackageReference>>(it) }
 
-            RepoMods.fetchManifest()
-            imported?.forEach {
-                mods.value[it.id] ?: run {
-                    RepoMods.installMod(it.id, it.version)
+                RepoMods.fetchManifest()
+                imported?.forEach {
+                    mods.value[it.id] ?: run {
+                        RepoMods.installMod(it.id, it.version)
+                    }
                 }
-            }
 
-            val importedIds = imported?.map { it.id }
-            mods.value.forEach { (_, meta) ->
-                if (importedIds?.contains(meta.id) == true) {
-                    meta.enable()
-                } else {
-                    meta.disable()
+                val importedIds = imported?.map { it.id }
+                mods.value.forEach { (_, meta) ->
+                    if (importedIds?.contains(meta.id) == true) {
+                        meta.enable()
+                    } else {
+                        meta.disable()
+                    }
                 }
             }
         }
-    }}
+    }
 
     fun loadInstalledModMetas() {
         val bepinexFolder = SettingsManager.bepInExFolder
