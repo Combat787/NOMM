@@ -72,6 +72,22 @@ fun App() {
                             }
                         )
                     }
+                    entry<MainNavigation.Servers> {
+                        ServerBrowserScreen(
+                            onOpenServer = { ip, port ->
+                                backStack.add(MainNavigation.Server(ip, port))
+                            }
+                        )
+                    }
+                    entry<MainNavigation.Server> { nav ->
+                        ServerDetailScreen(
+                            ip = nav.ip,
+                            port = nav.port,
+                            onBack = {
+                                backStack.removeLastOrNull()
+                            }
+                        )
+                    }
                     entry<MainNavigation.Settings> {
                         SettingsScreen()
                     }

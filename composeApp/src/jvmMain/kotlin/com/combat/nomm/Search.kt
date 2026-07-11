@@ -169,6 +169,7 @@ fun RowScope.SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier.Companion,
+    placeholder: String = "Search mods...",
 ) {
 
     TextField(
@@ -191,7 +192,7 @@ fun RowScope.SearchBar(
         ),
         placeholder = {
             Text(
-                "Search mods...",
+                placeholder,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondary
             )
