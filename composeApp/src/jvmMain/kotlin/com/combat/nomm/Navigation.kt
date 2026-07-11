@@ -17,8 +17,10 @@ sealed interface MainNavigation : NavKey {
                 polymorphic(NavKey::class) {
                     subclass(Search::class)
                     subclass(Libraries::class)
+                    subclass(Servers::class)
                     subclass(Settings::class)
                     subclass(Mod::class)
+                    subclass(Server::class)
                 }
             }
         }
@@ -31,10 +33,16 @@ sealed interface MainNavigation : NavKey {
     data object Libraries : MainNavigation
 
     @Serializable
+    data object Servers : MainNavigation
+
+    @Serializable
     data object Settings : MainNavigation
 
     @Serializable
     data class Mod(val modName: String) : MainNavigation
+
+    @Serializable
+    data class Server(val ip: String, val port: Int) : MainNavigation
 }
 
 @Serializable

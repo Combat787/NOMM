@@ -61,6 +61,15 @@ fun MainNavigationRail(
                 label = "Library"
             )
             RailDestination(
+                selected = currentKey is MainNavigation.Servers,
+                onClick = {
+                    backStack.clear()
+                    backStack.add(MainNavigation.Servers)
+                },
+                drawableResource = Res.drawable.server_24px,
+                label = "Servers"
+            )
+            RailDestination(
                 selected = currentKey is MainNavigation.Settings,
                 onClick = {
                     backStack.clear()
