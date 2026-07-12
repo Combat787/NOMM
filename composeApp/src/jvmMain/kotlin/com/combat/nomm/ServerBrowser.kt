@@ -1,10 +1,10 @@
 package com.combat.nomm
 
+import com.codedisaster.steamworks.SteamMatchmakingGameServerItem
+import com.codedisaster.steamworks.SteamNativeHandle
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -29,12 +29,11 @@ data class ServerModStatus(
 )
 
 data class ServerEntry(
-    val fav: ServerQuery.FavoriteServer,
-    val info: ServerQuery.ServerInfo?,
+    val fav: ServerFavorites.FavoriteServer,
+    val info: SteamDiscovery.ServerInfo?,
     val modlist: List<PackageReference>?,
     val modStatuses: List<ServerModStatus>,
     val isRefreshing: Boolean = false,
-    val isReachable: Boolean = false,
     val isDiscovered: Boolean = false,
 ) {
     val displayName: String
@@ -70,15 +69,22 @@ enum class ModStatusSummary {
 }
 
 object ServerFavorites {
+    @Serializable
+    data class FavoriteServer(
+        val ip: String,
+        val gamePort: Int,
+        val name: String? = null,
+    )
+
     private val file: java.io.File
         get() = java.io.File(System.getProperty("user.home"), ".nomm/servers.json")
 
-    val servers: StateFlow<List<ServerQuery.FavoriteServer>>
+    val servers: StateFlow<List<FavoriteServer>>
         field = MutableStateFlow(load())
 
-    private fun load(): List<ServerQuery.FavoriteServer> = runCatching {
+    private fun load(): List<FavoriteServer> = runCatching {
         if (file.exists()) {
-            json.decodeFromString<List<ServerQuery.FavoriteServer>>(file.readText())
+            json.decodeFromString<List<FavoriteServer>>(file.readText())
         } else emptyList()
     }.getOrElse { emptyList() }
 
@@ -92,7 +98,7 @@ object ServerFavorites {
     fun add(ip: String, gamePort: Int, name: String? = null) {
         val normalized = ip.trim()
         if (servers.value.any { it.ip == normalized && it.gamePort == gamePort }) return
-        servers.update { it + ServerQuery.FavoriteServer(normalized, gamePort, name) }
+        servers.update { it + FavoriteServer(normalized, gamePort, name) }
         save()
     }
 
@@ -111,17 +117,17 @@ object ServerFavorites {
 }
 
 object ServerBrowser {
-    val servers: StateFlow<List<ServerEntry>>
-        field = MutableStateFlow(emptyList())
+    private val _servers = MutableStateFlow<List<ServerEntry>>(emptyList())
+    val servers: StateFlow<List<ServerEntry>> = _servers
 
-    val isLoading: StateFlow<Boolean>
-        field = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
 
-    val isInstalling: StateFlow<Boolean>
-        field = MutableStateFlow(false)
+    private val _isInstalling = MutableStateFlow(false)
+    val isInstalling: StateFlow<Boolean> = _isInstalling
 
-    val installingModIds: StateFlow<Set<String>>
-        field = MutableStateFlow(emptySet())
+    private val _installingModIds = MutableStateFlow<Set<String>>(emptySet())
+    val installingModIds: StateFlow<Set<String>> = _installingModIds
 
     fun load() {
         discoverServers()
@@ -129,141 +135,121 @@ object ServerBrowser {
 
     fun discoverServers() {
         scope.launch {
-            if (isLoading.value) return@launch
-            isLoading.value = true
+            if (_isLoading.value) return@launch
+            _isLoading.value = true
             try {
-                println("[NOMM] Fetching server list from gamemonitoring.net...")
-                val gmServers = GameMonitoringDiscovery.fetchServers()
-                println(gmServers)
-                println("[NOMM] Got ${gmServers.size} servers from GameMonitoring")
+                val initStatus = SteamDiscovery.init()
+                if (initStatus != SteamDiscovery.InitStatus.OK) {
+                    println("[NOMM] Steam init failed: $initStatus")
+                    loadFavoritesOnly()
+                    return@launch
+                }
 
                 val favs = ServerFavorites.servers.value
-                val favKeys = favs.map { "${it.ip}:${it.gamePort}" }.toSet()
-
-                val gmByAddress = gmServers.associateBy { "${it.ip}:${it.port}" }
-
-                val discoveredEntries = gmServers.filter { s ->
-                    s.status && !favKeys.contains("${s.ip}:${s.port}")
-                }.map { s ->
-                    val info = buildServerInfo(s)
-                    val parsedMods = if (info.modlistUrl == null) ServerQuery.parseModsFromVersion(s.version) else null
+                _servers.value = favs.map { fav ->
                     ServerEntry(
-                        fav = ServerQuery.FavoriteServer(s.ip, s.port, s.name),
-                        info = info,
-                        modlist = parsedMods,
-                        modStatuses = parsedMods?.let { calculateModStatuses(it) } ?: emptyList(),
-                        isReachable = true,
-                        isDiscovered = true,
+                        fav = fav,
+                        info = null,
+                        modlist = null,
+                        modStatuses = emptyList(),
+                        isRefreshing = true,
                     )
                 }
 
-                val favEntries = favs.map { fav ->
-                    val existing = servers.value.find {
-                        it.fav.ip == fav.ip && it.fav.gamePort == fav.gamePort && !it.isDiscovered
-                    }
-                    if (existing != null) return@map existing
-
-                    val gmData = gmByAddress["${fav.ip}:${fav.gamePort}"]
-                    if (gmData != null && gmData.status) {
-                        val info = buildServerInfo(gmData)
-                        val parsedMods = if (info.modlistUrl == null) ServerQuery.parseModsFromVersion(gmData.version) else null
-                        ServerEntry(
-                            fav = fav,
-                            info = info,
-                            modlist = parsedMods,
-                            modStatuses = parsedMods?.let { calculateModStatuses(it) } ?: emptyList(),
-                            isReachable = true,
-                        )
-                    } else {
-                        ServerEntry(
-                            fav = fav,
-                            info = null,
-                            modlist = null,
-                            modStatuses = emptyList(),
-                            isRefreshing = true,
-                        )
-                    }
-                }
-
-                servers.value = (favEntries + discoveredEntries)
-                    .sortedWith(compareByDescending<ServerEntry> { !it.isDiscovered }
-                        .thenByDescending { it.info?.players ?: 0 })
-
-                servers.value.filter { it.info?.modlistUrl != null && it.modlist == null }.forEach { entry ->
-                    fetchModlistForServer(entry)
-                }
-
-                probeFavoriteServers()
+                SteamDiscovery.requestServerList()
             } finally {
-                isLoading.value = false
+                _isLoading.value = false
             }
         }
     }
 
+    fun onSteamServerDiscovered(details: SteamMatchmakingGameServerItem) {
+        val netAdr = details.netAdr
+        val connectionAddress = netAdr.connectionAddressString
+        val ip = connectionAddress.substringBeforeLast(":")
+        val gamePort = connectionAddress.substringAfterLast(":").toIntOrNull() ?: return
+        val queryPort = netAdr.queryPort.toInt() and 0xFFFF
+
+        val serverName = details.serverName
+        val modlistUrl = SteamDiscovery.parseModlistUrlFromName(serverName)
+
+        val info = SteamDiscovery.ServerInfo(
+            name = serverName,
+            map = details.map,
+            players = details.players,
+            maxPlayers = details.maxPlayers,
+            botPlayers = details.botPlayers,
+            ping = details.ping,
+            hasPassword = details.hasPassword(),
+            isSecure = details.isSecure,
+            steamId = SteamNativeHandle.getNativeHandle(details.steamID),
+            gameDir = details.gameDir,
+            gameTags = details.gameTags,
+            gamePort = gamePort,
+            queryPort = queryPort,
+            modlistUrl = modlistUrl,
+            gameDescription = details.gameDescription,
+            appId = details.appID,
+            serverVersion = details.serverVersion,
+            timeLastPlayed = details.timeLastPlayed,
+        )
+
+        val isFav = ServerFavorites.isFavorited(ip, gamePort)
+
+        _servers.update { current ->
+            val existingIndex = current.indexOfFirst {
+                it.fav.ip == ip && it.fav.gamePort == gamePort
+            }
+
+            if (existingIndex >= 0) {
+                val existing = current[existingIndex]
+                val updated = existing.copy(
+                    info = info,
+                    isRefreshing = false,
+                )
+                current.toMutableList().apply { this[existingIndex] = updated }
+            } else {
+                current + ServerEntry(
+                    fav = ServerFavorites.FavoriteServer(ip, gamePort, serverName),
+                    info = info,
+                    modlist = null,
+                    modStatuses = emptyList(),
+                    isDiscovered = !isFav,
+                )
+            }.sortedWith(
+                compareByDescending<ServerEntry> { !it.isDiscovered }
+                    .thenByDescending { it.info?.players ?: 0 }
+            ).also { sorted ->
+                scope.launch {
+                    sorted.filter { it.info?.modlistUrl != null && it.modlist == null }.forEach { entry ->
+                        fetchModlistForServer(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun loadFavoritesOnly() {
+        val favs = ServerFavorites.servers.value
+        _servers.value = favs.map { fav ->
+            ServerEntry(
+                fav = fav,
+                info = null,
+                modlist = null,
+                modStatuses = emptyList(),
+            )
+        }
+    }
+
     fun refreshAll() {
+        _servers.value = emptyList()
+        SteamDiscovery.cancelQuery()
         discoverServers()
     }
 
-    private fun buildServerInfo(s: GameMonitoringDiscovery.GameMonitoringServer): ServerQuery.ServerInfo {
-        return ServerQuery.ServerInfo(
-            address = "${s.ip}:${s.query}",
-            name = s.name,
-            map = s.map,
-            players = s.playerCount,
-            maxPlayers = s.maxPlayerCount,
-            version = s.version,
-            ping = 0,
-            isPasswordProtected = false,
-            modlistUrl = ServerQuery.parseModlistUrlFromName(s.name),
-            source = "gamemonitoring",
-            country = s.country,
-            language = s.language,
-            isVac = s.secured,
-            steamServerId = s.steamId,
-            lastUpdate = s.lastUpdate,
-        )
-    }
-
-    private fun probeFavoriteServers() {
-        scope.launch {
-            val toProbe = servers.value.filter { !it.isDiscovered && it.info == null }
-            if (toProbe.isEmpty()) return@launch
-            println("[NOMM] Probing ${toProbe.size} favorite servers without data...")
-
-            val probed = withContext(Dispatchers.IO) {
-                toProbe.map { entry ->
-                    async {
-                        val fav = entry.fav
-                        println("[NOMM] Probing ${fav.ip}:${fav.gamePort}...")
-                        val info = ServerQuery.probeServer(fav)
-                        println("[NOMM] ${fav.ip}:${fav.gamePort} result: ${info?.source ?: "unreachable"}")
-                        fav to info
-                    }
-                }.awaitAll()
-            }
-
-            servers.update { current ->
-                val probedMap = probed.toMap()
-                current.map { entry ->
-                    val info = probedMap[entry.fav]
-                    if (info != null) {
-                        val parsedMods = if (info.modlistUrl == null) ServerQuery.parseModsFromVersion(info.version) else null
-                        entry.copy(
-                            info = info,
-                            modlist = parsedMods ?: entry.modlist,
-                            modStatuses = parsedMods?.let { calculateModStatuses(it) } ?: entry.modStatuses,
-                            isReachable = true,
-                            isRefreshing = false,
-                        )
-                    } else if (entry.info == null && !entry.isDiscovered) {
-                        entry.copy(isRefreshing = false)
-                    } else entry
-                }
-            }
-
-            servers.value.filter { it.info?.modlistUrl != null && it.modlist == null && !it.isRefreshing }.forEach { entry ->
-                fetchModlistForServer(entry)
-            }
+    fun refreshSteamServers() {
+        if (SteamDiscovery.initResult.value == SteamDiscovery.InitStatus.OK) {
+            SteamDiscovery.requestServerList()
         }
     }
 
@@ -271,7 +257,7 @@ object ServerBrowser {
         scope.launch {
             val url = entry.info?.modlistUrl ?: return@launch
 
-            servers.update { current ->
+            _servers.update { current ->
                 current.map { if (it.fav == entry.fav) it.copy(isRefreshing = true) else it }
             }
 
@@ -286,7 +272,7 @@ object ServerBrowser {
 
             val statuses = modlist?.let { calculateModStatuses(it) } ?: emptyList()
 
-            servers.update { current ->
+            _servers.update { current ->
                 current.map {
                     if (it.fav == entry.fav) {
                         it.copy(modlist = modlist, modStatuses = statuses, isRefreshing = false)
@@ -328,26 +314,24 @@ object ServerBrowser {
         }
     }
 
-
     fun toggleFavorite(entry: ServerEntry) {
         val ip = entry.fav.ip
         val port = entry.fav.gamePort
         val name = entry.fav.name
         ServerFavorites.toggleFavorite(ip, port, name)
 
-        servers.update { current ->
-            val isFav = ServerFavorites.isFavorited(ip, port)
+        _servers.update { current ->
             current.map { e ->
                 if (e.fav.ip == ip && e.fav.gamePort == port) {
-                    e.copy(isDiscovered = !isFav)
+                    e.copy(isDiscovered = !ServerFavorites.isFavorited(ip, port))
                 } else e
             }
         }
     }
 
     fun installMissingMods(entry: ServerEntry) {
-        installingModIds.value = entry.modsToInstall.map { it.modRef.id }.toSet()
-        isInstalling.value = true
+        _installingModIds.value = entry.modsToInstall.map { it.modRef.id }.toSet()
+        _isInstalling.value = true
 
         entry.modsToInstall.forEach { status ->
             RepoMods.installMod(status.modRef.id, status.serverVersion)
@@ -355,14 +339,14 @@ object ServerBrowser {
     }
 
     fun finishInstall(entry: ServerEntry) {
-        isInstalling.value = false
-        installingModIds.value = emptySet()
+        _isInstalling.value = false
+        _installingModIds.value = emptySet()
 
         LocalMods.refresh()
 
         entry.modlist?.let { modlist ->
             val newStatuses = calculateModStatuses(modlist)
-            servers.update { current ->
+            _servers.update { current ->
                 current.map {
                     if (it.fav == entry.fav) it.copy(modStatuses = newStatuses)
                     else it
@@ -399,7 +383,7 @@ object ServerBrowser {
     }
 
     fun refreshModStatuses() {
-        servers.update { current ->
+        _servers.update { current ->
             current.map { entry ->
                 entry.modlist?.let { modlist ->
                     entry.copy(modStatuses = calculateModStatuses(modlist))

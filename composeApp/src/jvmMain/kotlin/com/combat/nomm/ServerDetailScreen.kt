@@ -16,6 +16,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -51,6 +52,13 @@ fun ServerDetailScreen(
     val localMods by LocalMods.mods.collectAsState()
     LaunchedEffect(localMods) {
         ServerBrowser.refreshModStatuses()
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5000)
+            ServerBrowser.refreshSteamServers()
+        }
     }
 
     var selectedTab by remember { mutableStateOf(ServerDetailTab.Details) }
@@ -116,43 +124,35 @@ private fun ServerTitleCard(entry: ServerEntry, onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        if (entry.info != null) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                Icon(painterResource(Res.drawable.person_24px), null, Modifier.size(24.dp))
-                                Text(
-                                    "${entry.info.players}/${entry.info.maxPlayers}",
-                                    style = MaterialTheme.typography.labelLargeEmphasized,
-                                    maxLines = 1,
-                                )
-                            }
-                            if (entry.info.map?.isNotEmpty() ?: false) {
-                                VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                                Text(
-                                    entry.info.map,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                )
-                            }
-                            if (entry.info.version?.isNotEmpty() ?: false) {
-                                VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                                Text(
-                                    entry.info.version,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                )
-                            }
-                            if (entry.info.ping > 0) {
-                                VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                                Text(
-                                    "${entry.info.ping}ms",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                )
-                            }
+                    if (entry.info != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Icon(painterResource(Res.drawable.person_24px), null, Modifier.size(24.dp))
+                            Text(
+                                "${entry.info.players}/${entry.info.maxPlayers}",
+                                style = MaterialTheme.typography.labelLargeEmphasized,
+                                maxLines = 1,
+                            )
                         }
+                        if (entry.info.map.isNotEmpty()) {
+                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+                            Text(
+                                entry.info.map,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                            )
+                        }
+                        if (entry.info.ping > 0) {
+                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+                            Text(
+                                "${entry.info.ping}ms",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                     }
                 }
             }
@@ -368,20 +368,14 @@ private fun ServerDetailsContent(entry: ServerEntry) {
                 if (entry.info != null) {
                     DetailRow("Address", "${entry.fav.ip}:${entry.fav.gamePort}")
                     DetailRow("Players", "${entry.info.players} / ${entry.info.maxPlayers}")
-                    if (entry.info.bots > 0) DetailRow("Bots", entry.info.bots.toString())
-                    if (entry.info.map?.isNotEmpty() ?: false) DetailRow("Map", entry.info.map)
-                    if (entry.info.country?.isNotEmpty() ?: false) {
-                        DetailRow("Location", COUNTRY_NAMES[entry.info.country] ?: entry.info.country)
-                    }
-                    if (entry.info.language?.isNotEmpty() ?: false) {
-                        DetailRow("Language", LANGUAGE_NAMES[entry.info.language] ?: entry.info.language)
-                    }
-                    if (entry.info.version?.isNotEmpty() ?: false) DetailRow("Version", entry.info.version)
-                    if (entry.info.isVac) DetailRow("VAC", "Enabled")
-                    if (entry.info.steamServerId?.isNotEmpty() ?: false) DetailRow("Steam ID", entry.info.steamServerId)
+                    if (entry.info.botPlayers > 0) DetailRow("Bots", entry.info.botPlayers.toString())
+                    if (entry.info.map.isNotEmpty()) DetailRow("Map", entry.info.map)
                     if (entry.info.ping > 0) DetailRow("Ping", "${entry.info.ping} ms")
-                    if (entry.info.isPasswordProtected) DetailRow("Password", "Yes")
-                    if (entry.info.lastUpdate > 0) DetailRow("Last Updated", formatTimeAgo(entry.info.lastUpdate))
+                    if (entry.info.hasPassword) DetailRow("Password", "Yes")
+                    if (entry.info.isSecure) DetailRow("VAC", "Enabled")
+                    if (entry.info.steamId > 0) DetailRow("Steam ID", entry.info.steamId.toString())
+                    if (entry.info.gameDir.isNotEmpty()) DetailRow("Game Dir", entry.info.gameDir)
+                    if (entry.info.gameTags.isNotEmpty()) DetailRow("Tags", entry.info.gameTags)
                 } else if (entry.isRefreshing) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -391,9 +385,9 @@ private fun ServerDetailsContent(entry: ServerEntry) {
                     }
                 } else {
                     Text(
-                        "Server unreachable",
+                        "No server data available",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Spacer(Modifier.height(0.dp))

@@ -74,6 +74,9 @@ kotlin {
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
             implementation("org.slf4j:slf4j-simple:2.0.17")
         }
+        jvmMain.dependencies {
+            implementation(libs.steamworks4j)
+        }
     }
 }
 

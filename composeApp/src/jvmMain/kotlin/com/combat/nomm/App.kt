@@ -85,6 +85,9 @@ fun App() {
                             port = nav.port,
                             onBack = {
                                 backStack.removeLastOrNull()
+                                if (backStack.isEmpty()) {
+                                    backStack.add(MainNavigation.Servers)
+                                }
                             }
                         )
                     }

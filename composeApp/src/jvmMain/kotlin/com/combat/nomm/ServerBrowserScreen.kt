@@ -21,43 +21,6 @@ import nuclearoptionmodmanager.composeapp.generated.resources.add_24px
 import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
 import nuclearoptionmodmanager.composeapp.generated.resources.sync_24px
 import org.jetbrains.compose.resources.painterResource
-import kotlin.math.abs
-
-internal fun formatTimeAgo(epochSeconds: Long): String {
-    if (epochSeconds == 0L) return "Unknown"
-    val now = System.currentTimeMillis() / 1000
-    val diff = abs(now - epochSeconds)
-    return when {
-        diff < 60 -> "${diff}s ago"
-        diff < 3600 -> "${diff / 60}m ago"
-        diff < 86400 -> "${diff / 3600}h ago"
-        else -> "${diff / 86400}d ago"
-    }
-}
-
-internal val COUNTRY_NAMES = mapOf(
-    "US" to "United States", "GB" to "United Kingdom", "DE" to "Germany",
-    "FR" to "France", "RU" to "Russia", "BR" to "Brazil", "AU" to "Australia",
-    "CA" to "Canada", "JP" to "Japan", "CN" to "China", "KR" to "South Korea",
-    "IN" to "India", "NL" to "Netherlands", "SE" to "Sweden", "NO" to "Norway",
-    "FI" to "Finland", "DK" to "Denmark", "PL" to "Poland", "CZ" to "Czech Republic",
-    "AT" to "Austria", "CH" to "Switzerland", "BE" to "Belgium", "IT" to "Italy",
-    "ES" to "Spain", "PT" to "Portugal", "UA" to "Ukraine", "RO" to "Romania",
-    "BG" to "Bulgaria", "HU" to "Hungary", "IE" to "Ireland", "NZ" to "New Zealand",
-    "SG" to "Singapore", "ZA" to "South Africa", "AR" to "Argentina", "MX" to "Mexico",
-    "CL" to "Chile", "CO" to "Colombia", "PE" to "Peru", "PH" to "Philippines",
-    "TH" to "Thailand", "VN" to "Vietnam", "ID" to "Indonesia", "MY" to "Malaysia",
-    "TR" to "Turkey", "IL" to "Israel", "AE" to "UAE", "SA" to "Saudi Arabia",
-)
-
-internal val LANGUAGE_NAMES = mapOf(
-    "en" to "English", "de" to "German", "fr" to "French", "ru" to "Russian",
-    "pt" to "Portuguese", "es" to "Spanish", "it" to "Italian", "pl" to "Polish",
-    "nl" to "Dutch", "sv" to "Swedish", "no" to "Norwegian", "da" to "Danish",
-    "fi" to "Finnish", "cs" to "Czech", "hu" to "Hungarian", "ro" to "Romanian",
-    "tr" to "Turkish", "uk" to "Ukrainian", "ar" to "Arabic", "zh" to "Chinese",
-    "ja" to "Japanese", "ko" to "Korean", "th" to "Thai", "vi" to "Vietnamese",
-)
 
 @Composable
 fun ServerBrowserScreen(
@@ -310,8 +273,8 @@ private fun ServerCard(entry: ServerEntry, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (entry.info != null && entry.info.source != "tcp") {
-                        if (entry.info.map?.isNotEmpty() ?: false) {
+                    if (entry.info != null) {
+                        if (entry.info.map.isNotEmpty()) {
                             Text(
                                 entry.info.map,
                                 style = MaterialTheme.typography.bodySmall,
@@ -331,32 +294,11 @@ private fun ServerCard(entry: ServerEntry, onClick: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
-                        if (entry.info.version?.isNotEmpty() ?: false) {
-                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 2.dp))
-                            Text(
-                                entry.info.version,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
                     } else {
                         Text(
                             "${entry.fav.ip}:${entry.fav.gamePort}",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        if (entry.isRefreshing) {
-                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 2.dp))
-                            Text(
-                                "Probing...",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        } else if (!entry.isReachable && entry.info == null) {
-                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 2.dp))
-                            Text(
-                                "Unreachable",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
                     }
                 }
             }

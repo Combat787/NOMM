@@ -14,7 +14,7 @@ filekit = "0.14.1"
 
 
 materialKolor = "5.0.0-alpha07"
-
+steamworks4j = "1.10.0"
 
 multiplatform-nav3-ui = "1.1.1"
 
@@ -40,6 +40,7 @@ filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose
 
 
 materialKolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
+steamworks4j = { module = "com.code-disaster.steamworks4j:steamworks4j", version.ref = "steamworks4j" }
 
 jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "multiplatform-nav3-ui" }
 
