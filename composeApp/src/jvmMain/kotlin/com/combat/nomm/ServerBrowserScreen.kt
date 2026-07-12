@@ -1,6 +1,5 @@
 package com.combat.nomm
 
-import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +16,10 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import nuclearoptionmodmanager.composeapp.generated.resources.*
+import nuclearoptionmodmanager.composeapp.generated.resources.Res
+import nuclearoptionmodmanager.composeapp.generated.resources.add_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.sync_24px
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
 
@@ -57,7 +59,6 @@ internal val LANGUAGE_NAMES = mapOf(
     "ja" to "Japanese", "ko" to "Korean", "th" to "Thai", "vi" to "Vietnamese",
 )
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ServerBrowserScreen(
     onOpenServer: (String, Int) -> Unit,
@@ -310,7 +311,7 @@ private fun ServerCard(entry: ServerEntry, onClick: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (entry.info != null && entry.info.source != "tcp") {
-                        if (entry.info.map.isNotEmpty()) {
+                        if (entry.info.map?.isNotEmpty() ?: false) {
                             Text(
                                 entry.info.map,
                                 style = MaterialTheme.typography.bodySmall,
@@ -330,7 +331,7 @@ private fun ServerCard(entry: ServerEntry, onClick: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
-                        if (entry.info.version.isNotEmpty()) {
+                        if (entry.info.version?.isNotEmpty() ?: false) {
                             VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 2.dp))
                             Text(
                                 entry.info.version,

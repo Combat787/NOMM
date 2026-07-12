@@ -128,7 +128,7 @@ private fun ServerTitleCard(entry: ServerEntry, onBack: () -> Unit) {
                                     maxLines = 1,
                                 )
                             }
-                            if (entry.info.map.isNotEmpty()) {
+                            if (entry.info.map?.isNotEmpty() ?: false) {
                                 VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
                                 Text(
                                     entry.info.map,
@@ -136,7 +136,7 @@ private fun ServerTitleCard(entry: ServerEntry, onBack: () -> Unit) {
                                     maxLines = 1,
                                 )
                             }
-                            if (entry.info.version.isNotEmpty()) {
+                            if (entry.info.version?.isNotEmpty() ?: false) {
                                 VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
                                 Text(
                                     entry.info.version,
@@ -369,16 +369,16 @@ private fun ServerDetailsContent(entry: ServerEntry) {
                     DetailRow("Address", "${entry.fav.ip}:${entry.fav.gamePort}")
                     DetailRow("Players", "${entry.info.players} / ${entry.info.maxPlayers}")
                     if (entry.info.bots > 0) DetailRow("Bots", entry.info.bots.toString())
-                    if (entry.info.map.isNotEmpty()) DetailRow("Map", entry.info.map)
-                    if (entry.info.country.isNotEmpty()) {
+                    if (entry.info.map?.isNotEmpty() ?: false) DetailRow("Map", entry.info.map)
+                    if (entry.info.country?.isNotEmpty() ?: false) {
                         DetailRow("Location", COUNTRY_NAMES[entry.info.country] ?: entry.info.country)
                     }
-                    if (entry.info.language.isNotEmpty()) {
+                    if (entry.info.language?.isNotEmpty() ?: false) {
                         DetailRow("Language", LANGUAGE_NAMES[entry.info.language] ?: entry.info.language)
                     }
-                    if (entry.info.version.isNotEmpty()) DetailRow("Version", entry.info.version)
+                    if (entry.info.version?.isNotEmpty() ?: false) DetailRow("Version", entry.info.version)
                     if (entry.info.isVac) DetailRow("VAC", "Enabled")
-                    if (entry.info.steamServerId.isNotEmpty()) DetailRow("Steam ID", entry.info.steamServerId)
+                    if (entry.info.steamServerId?.isNotEmpty() ?: false) DetailRow("Steam ID", entry.info.steamServerId)
                     if (entry.info.ping > 0) DetailRow("Ping", "${entry.info.ping} ms")
                     if (entry.info.isPasswordProtected) DetailRow("Password", "Yes")
                     if (entry.info.lastUpdate > 0) DetailRow("Last Updated", formatTimeAgo(entry.info.lastUpdate))

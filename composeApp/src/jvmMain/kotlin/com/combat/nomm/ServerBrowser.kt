@@ -134,6 +134,7 @@ object ServerBrowser {
             try {
                 println("[NOMM] Fetching server list from gamemonitoring.net...")
                 val gmServers = GameMonitoringDiscovery.fetchServers()
+                println(gmServers)
                 println("[NOMM] Got ${gmServers.size} servers from GameMonitoring")
 
                 val favs = ServerFavorites.servers.value
@@ -208,8 +209,8 @@ object ServerBrowser {
             address = "${s.ip}:${s.query}",
             name = s.name,
             map = s.map,
-            players = s.numplayers,
-            maxPlayers = s.maxplayers,
+            players = s.playerCount,
+            maxPlayers = s.maxPlayerCount,
             version = s.version,
             ping = 0,
             isPasswordProtected = false,

@@ -25,18 +25,18 @@ object ServerQuery {
     data class ServerInfo(
         val address: String,
         val name: String,
-        val map: String,
+        val map: String?,
         val players: Int,
         val maxPlayers: Int,
-        val version: String,
+        val version: String?,
         val ping: Long,
         val isPasswordProtected: Boolean,
         val modlistUrl: String?,
         val source: String,
-        val country: String = "",
-        val language: String = "",
+        val country: String? = null,
+        val language: String? = null,
         val isVac: Boolean = false,
-        val steamServerId: String = "",
+        val steamServerId: String? = null,
         val lastUpdate: Long = 0,
         val bots: Int = 0,
     )
@@ -81,6 +81,7 @@ object ServerQuery {
     private suspend fun probeHttp(ip: String, port: Int): ServerInfo? = runCatching {
         val startTime = System.currentTimeMillis()
         val url = "http://$ip:$port/NO/info/"
+        
         val response = NetworkClient.client.get(url) {
             timeout {
                 requestTimeoutMillis = HTTP_TIMEOUT_MS.toLong()
@@ -93,6 +94,7 @@ object ServerQuery {
         if (response.status.value !in 200..299) return@runCatching null
 
         val body = response.bodyAsText()
+        println(body)
         val map = json.parseToJsonElement(body).jsonObject
         val get: (String) -> String? = { key -> map[key]?.jsonPrimitive?.contentOrNull }
 
@@ -152,8 +154,8 @@ object ServerQuery {
         return regex.find(serverName)?.groupValues?.getOrNull(1)
     }
 
-    fun parseModsFromVersion(version: String): List<PackageReference> {
-        if (version.isBlank()) return emptyList()
+    fun parseModsFromVersion(version: String?): List<PackageReference> {
+        if (version.isNullOrBlank()) return emptyList()
 
         val gameVersionMatch = Regex("""^(\d+\.\d+\.\d+)""").find(version) ?: return emptyList()
         val gameVersion = gameVersionMatch.groupValues[1]
