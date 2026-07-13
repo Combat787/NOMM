@@ -83,6 +83,11 @@ fun App() {
                         ServerDetailScreen(
                             ip = nav.ip,
                             port = nav.port,
+                            onOpenMod = { targetId ->
+                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                    backStack.add(MainNavigation.Mod(targetId))
+                                }
+                            },
                             onBack = {
                                 backStack.removeLastOrNull()
                                 if (backStack.isEmpty()) {

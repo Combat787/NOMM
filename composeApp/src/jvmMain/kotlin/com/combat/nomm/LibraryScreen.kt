@@ -2,6 +2,7 @@ package com.combat.nomm
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -87,10 +88,49 @@ fun LibraryScreen(
                         colors = itemColors
                     )
                     DropdownMenuItem(
-                        text = { Text("Add from file") }, onClick = {
+                        text = { Text("Add from File") }, onClick = {
                             menuExpanded = false
                             LocalMods.addFromFile()
                         }, leadingIcon = { Icon(painterResource(Res.drawable.folder_open_24px), null) },
+                        colors = itemColors
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Enable all Mods") }, onClick = {
+                            menuExpanded = false
+                            LocalMods.enableAll()
+                        }, leadingIcon = {
+                            BadgedBox(
+                                badge = {
+                                    Icon(
+                                        painterResource(Res.drawable.check_24px),
+                                        null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            ) {
+                                Icon(painterResource(Res.drawable.newsstand_24px), null)
+                            }
+
+                        },
+                        colors = itemColors
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Disable all Mods") }, onClick = {
+                            menuExpanded = false
+                            LocalMods.disableAll()
+                        }, leadingIcon = {
+                            BadgedBox(
+                                badge = {
+                                    Icon(
+                                        painterResource(Res.drawable.close_24px),
+                                        null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            ) {
+                                Icon(painterResource(Res.drawable.newsstand_24px), null)
+                            }
+                        },
                         colors = itemColors
                     )
                 }

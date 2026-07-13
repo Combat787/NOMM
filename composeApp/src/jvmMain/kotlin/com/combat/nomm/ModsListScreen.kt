@@ -21,7 +21,6 @@ import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
 import nuclearoptionmodmanager.composeapp.generated.resources.sync_24px
 import org.jetbrains.compose.resources.painterResource
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     onNavigateToMod: (String) -> Unit,

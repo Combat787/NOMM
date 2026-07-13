@@ -733,23 +733,23 @@ fun ModVersionDependenciesContent(
                 return@LazyColumn
             }
 
-            item { DependencyHeader("Extends", MaterialTheme.colorScheme.onSurface) }
+            item { DetailListHeader("Extends", MaterialTheme.colorScheme.onSurface) }
             if (artifact.extends != null) {
                 item {
                     val extendsVersion = artifact.extends.version
                     DependencyItemCard(
                         id = artifact.extends.id,
                         versions = if (extendsVersion != null) listOf(extendsVersion) else emptyList(),
-                        onOpenMod = onOpenMod,
+                        onClick = onOpenMod,
                         isIncompatible = false
                     )
                 }
             } else {
-                item { EmptySectionText("None") }
+                item { DetailListEmptySection("None") }
             }
 
             item {
-                DependencyHeader("Dependencies", MaterialTheme.colorScheme.onSurface)
+                DetailListHeader("Dependencies", MaterialTheme.colorScheme.onSurface)
             }
             if (artifact.dependencies.isNotEmpty()) {
                 val groupedDeps = artifact.dependencies.groupBy { it.id }
@@ -758,11 +758,11 @@ fun ModVersionDependenciesContent(
                     DependencyItemCard(id, versions, onOpenMod, false)
                 }
             } else {
-                item { EmptySectionText("None") }
+                item { DetailListEmptySection("None") }
             }
 
             item {
-                DependencyHeader("Incompatibilities", MaterialTheme.colorScheme.error)
+                DetailListHeader("Incompatibilities", MaterialTheme.colorScheme.error)
             }
             if (artifact.incompatibilities.isNotEmpty()) {
                 val groupedIncompats = artifact.incompatibilities.groupBy { it.id }
@@ -771,18 +771,18 @@ fun ModVersionDependenciesContent(
                     DependencyItemCard(id, versions, onOpenMod, true)
                 }
             } else {
-                item { EmptySectionText("None") }
+                item { DetailListEmptySection("None") }
             }
 
             item {
-                DependencyHeader("Dependents", MaterialTheme.colorScheme.onSurface)
+                DetailListHeader("Dependents", MaterialTheme.colorScheme.onSurface)
             }
             if (dependents.isNotEmpty()) {
                 items(dependents) { (id, versions) ->
                     DependencyItemCard(id, versions, onOpenMod, false)
                 }
             } else {
-                item { EmptySectionText("None") }
+                item { DetailListEmptySection("None") }
             }
         }
 
@@ -803,7 +803,7 @@ fun ModVersionDependenciesContent(
 }
 
 @Composable
-private fun DependencyHeader(text: String, color: Color) {
+fun DetailListHeader(text: String, color: Color) {
     Column {
         Text(
             text = text.uppercase(),
@@ -819,15 +819,37 @@ private fun DependencyHeader(text: String, color: Color) {
 private fun DependencyItemCard(
     id: String,
     versions: List<Version>,
-    onOpenMod: (String) -> Unit,
+    onClick: (String) -> Unit,
     isIncompatible: Boolean,
 ) {
+
     val mod = RepoMods.mods.collectAsState().value.find { it.id == id }
+    DetailListItemCard(
+        mod?.displayName ?: id,
+        versions.joinToString(", "),
+        onClick =
+            if (mod != null) {
+                { onClick(id) }
+            } else {
+                null
+            },
+        isIncompatible
+    )
+}
+
+@Composable
+fun DetailListItemCard(
+    title: String,
+    description: String,
+    onClick: (() -> Unit)?,
+    error: Boolean,
+    secondaryDescription: String? = null
+) {
 
     Surface(
-        onClick = { if (mod != null) onOpenMod(id) },
-        enabled = mod != null,
-        color = if (isIncompatible) MaterialTheme.colorScheme.errorContainer
+        onClick = { onClick?.invoke() },
+        enabled = onClick != null,
+        color = if (error) MaterialTheme.colorScheme.errorContainer
         else MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clipToBounds()
@@ -840,32 +862,40 @@ private fun DependencyItemCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = mod?.displayName ?: id,
+                    text = title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (isIncompatible) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (versions.isNotEmpty()) {
-                    Text(
-                        text = versions.joinToString(", "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isIncompatible) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (description.isNotEmpty()) {
+                    Row {
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (secondaryDescription != null) {
+                            Icon(
+                                painter = painterResource(Res.drawable.arrow_right_alt_24px),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = secondaryDescription,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
-            if (mod != null) {
+            if (onClick != null) {
                 Icon(
                     painter = painterResource(Res.drawable.arrow_right_24px),
                     contentDescription = null,
-                    tint = if (isIncompatible) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
-                )
-            } else {
-                Text(
-                    text = "MISSING",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -873,7 +903,7 @@ private fun DependencyItemCard(
 }
 
 @Composable
-private fun EmptySectionText(text: String) {
+fun DetailListEmptySection(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,

@@ -2,6 +2,9 @@ package com.combat.nomm
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
@@ -30,6 +33,7 @@ fun ServerDetailScreen(
     ip: String,
     port: Int,
     onBack: () -> Unit,
+    onOpenMod: (String) -> Unit,
 ) {
     val serverList by ServerBrowser.servers.collectAsState()
     val entry = remember(serverList, ip, port) {
@@ -95,7 +99,7 @@ fun ServerDetailScreen(
                     ServerDetailsContent(entry)
                 }
                 entry<ServerNavigation.Modpack> {
-                    ServerModlistContent(entry, isInstalling, installStatuses)
+                    ServerModlistContent(entry, isInstalling, installStatuses, onOpenMod)
                 }
             }
         }
@@ -330,73 +334,122 @@ private fun ServerDetailsContent(entry: ServerEntry) {
 }
 
 @Composable
-private fun ServerModlistContent(entry: ServerEntry, isInstalling: Boolean, installStatuses: Map<String, TaskState>) {
-    if (entry.modlist != null) {
-        val state = rememberScrollState()
-
-        val isScrollable by remember {
-            derivedStateOf { state.maxValue > 0 }
+private fun ServerModlistContent(
+    entry: ServerEntry,
+    isInstalling: Boolean,
+    installStatuses: Map<String, TaskState>,
+    onOpenMod: (String) -> Unit
+) {
+    val state = rememberLazyListState()
+    val isScrollable by remember {
+        derivedStateOf {
+            state.layoutInfo.visibleItemsInfo.size < state.layoutInfo.totalItemsCount ||
+                    state.firstVisibleItemScrollOffset > 0
         }
+    }
 
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            state = state,
         ) {
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(state),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Spacer(Modifier.height(0.dp))
-                val grouped = entry.modStatuses.groupBy { it.status }
 
-                grouped[ModStatus.MATCH]?.let { mods ->
-                    ModSection("Installed (${mods.size})", MaterialTheme.colorScheme.primary, mods, installStatuses)
-                }
-                grouped[ModStatus.NEED_INSTALL]?.let { mods ->
-                    ModSection("To Install (${mods.size})", MaterialTheme.colorScheme.tertiary, mods, installStatuses)
-                }
-                grouped[ModStatus.VERSION_MISMATCH]?.let { mods ->
-                    ModSection(
-                        "Version Mismatch (${mods.size})",
-                        MaterialTheme.colorScheme.error,
-                        mods,
-                        installStatuses
-                    )
-                }
-                grouped[ModStatus.NOT_IN_REPO]?.let { mods ->
-                    ModSection(
-                        "Not in Repository (${mods.size})",
-                        MaterialTheme.colorScheme.outline,
-                        mods,
-                        installStatuses
-                    )
-                }
-                Spacer(Modifier.height(0.dp))
+
+            if (entry.modStatuses.isEmpty()) {
+                item { Text("No Modpack found.", color = MaterialTheme.colorScheme.error) }
+                return@LazyColumn
             }
-            if (isScrollable) {
-                VerticalScrollbar(
-                    modifier = Modifier.fillMaxHeight().width(8.dp).padding(vertical = 8.dp).clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    adapter = rememberScrollbarAdapter(state),
-                    style = defaultScrollbarStyle().copy(
-                        unhoverColor = MaterialTheme.colorScheme.outline,
-                        hoverColor = MaterialTheme.colorScheme.primary,
-                        thickness = 8.dp,
-                        shape = CircleShape,
-                    ),
+
+            val groupedStatuses = entry.modStatuses.groupBy { it.status }
+
+            item { DetailListHeader("Matched", MaterialTheme.colorScheme.onSurface) }
+            groupedStatuses[ModStatus.MATCH]?.let { statuses ->
+                items(statuses) { status ->
+                    val mod = RepoMods.mods.collectAsState().value.find { it.id == status.modRef.id }
+                    DetailListItemCard(
+                        title = mod?.displayName ?: status.modRef.id,
+                        description = status.serverVersion?.toString() ?: "",
+                        onClick = if (mod != null) {
+                            { onOpenMod.invoke(mod.id) }
+                        } else null,
+                        error = false
+                    )
+                }
+            } ?: run {
+                item { DetailListEmptySection("None") }
+            }
+
+            item { DetailListHeader("Not Installed", MaterialTheme.colorScheme.error) }
+            groupedStatuses[ModStatus.NEED_INSTALL]?.let { statuses ->
+                items(statuses) { status ->
+                    val mod = RepoMods.mods.collectAsState().value.find { it.id == status.modRef.id }
+                    DetailListItemCard(
+                        title = mod?.displayName ?: status.modRef.id,
+                        description = status.serverVersion?.toString() ?: "",
+                        onClick = if (mod != null) {
+                            { onOpenMod.invoke(mod.id) }
+                        } else null,
+                        error = true
+                    )
+                }
+            } ?: run {
+                item { DetailListEmptySection("None") }
+            }
+
+            item { DetailListHeader("Not In Manifest", MaterialTheme.colorScheme.error) }
+            groupedStatuses[ModStatus.NOT_IN_REPO]?.let { statuses ->
+                items(statuses) { status ->
+                    val mod = RepoMods.mods.collectAsState().value.find { it.id == status.modRef.id }
+                    DetailListItemCard(
+                        title = mod?.displayName ?: status.modRef.id,
+                        description = status.serverVersion?.toString() ?: "",
+                        onClick = if (mod != null) {
+                            { onOpenMod.invoke(mod.id) }
+                        } else null,
+                        error = true
+                    )
+                }
+            } ?: run {
+                item { DetailListEmptySection("None") }
+            }
+
+            item { DetailListHeader("Version Mismatch", MaterialTheme.colorScheme.error) }
+            groupedStatuses[ModStatus.VERSION_MISMATCH]?.let { statuses ->
+                items(statuses) { status ->
+                    val mod = RepoMods.mods.collectAsState().value.find { it.id == status.modRef.id }
+                    DetailListItemCard(
+                        title = mod?.displayName ?: status.modRef.id,
+                        description = status.localVersion?.toString() ?: "",
+                        onClick = if (mod != null) {
+                            { onOpenMod.invoke(mod.id) }
+                        } else null,
+                        error = true,
+                        secondaryDescription = status.serverVersion?.toString() ?: ""
+                    )
+                }
+            } ?: run {
+                item { DetailListEmptySection("None") }
+            }
+
+            
+        }
+
+        if (isScrollable) {
+            VerticalScrollbar(
+                modifier = Modifier.fillMaxHeight().width(8.dp).padding(vertical = 8.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                adapter = rememberScrollbarAdapter(state),
+                style = defaultScrollbarStyle().copy(
+                    unhoverColor = MaterialTheme.colorScheme.outline,
+                    hoverColor = MaterialTheme.colorScheme.primary,
+                    thickness = 8.dp,
+                    shape = CircleShape
                 )
-            }
-        }
-    } else if (entry.isRefreshing) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(modifier = Modifier.size(32.dp))
-        }
-    } else {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "No modlist detected for this server.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

@@ -315,6 +315,18 @@ object LocalMods {
         loadInstalledModMetas()
         RepoMods.fetchManifest()
     }
+
+    fun enableAll() {
+        mods.value.forEach { (_, meta) -> 
+            meta.enable()
+        }
+    }
+
+    fun disableAll() {
+        mods.value.forEach { (_, meta) -> 
+            meta.disable()
+        }
+    }
 }
 
 @Serializable
