@@ -12,7 +12,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 object SteamDiscovery {
     private const val APP_ID = 2168680
@@ -261,7 +263,7 @@ object SteamDiscovery {
         val players: Int,
         val maxPlayers: Int,
         val botPlayers: Int,
-        val ping: Int,
+        val ping: Duration,
         val hasPassword: Boolean,
         val isSecure: Boolean,
         val steamId: Long,
@@ -273,7 +275,7 @@ object SteamDiscovery {
         val gameDescription: String,
         val appId: Int,
         val serverVersion: Int,
-        val timeLastPlayed: Int,
+        val timeLastPlayed: Instant,
     )
 
     data class PlayerInfo(
@@ -309,7 +311,7 @@ object SteamDiscovery {
                         players = server.players,
                         maxPlayers = server.maxPlayers,
                         botPlayers = server.botPlayers,
-                        ping = server.ping,
+                        ping = server.ping.milliseconds,
                         hasPassword = server.hasPassword(),
                         isSecure = server.isSecure,
                         steamId = SteamNativeHandle.getNativeHandle(server.steamID),
@@ -321,7 +323,7 @@ object SteamDiscovery {
                         gameDescription = server.gameDescription,
                         appId = server.appID,
                         serverVersion = server.serverVersion,
-                        timeLastPlayed = server.timeLastPlayed,
+                        timeLastPlayed = Instant.fromEpochSeconds(server.timeLastPlayed.toLong()),
                     )
                 )
             }

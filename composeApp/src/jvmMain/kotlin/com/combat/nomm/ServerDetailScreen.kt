@@ -133,10 +133,10 @@ fun ServerDetails(
                     maxLines = 1,
                 )
             }
-            if (entry.info.ping > 0) {
+            if (entry.info.ping.isPositive()) {
                 VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
                 Text(
-                    "${entry.info.ping}ms",
+                    entry.info.ping.toString(),
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                 )
@@ -290,7 +290,7 @@ private fun ServerDetailsContent(entry: ServerEntry) {
                     DetailRow("Players", "${entry.info.players} / ${entry.info.maxPlayers}")
                     if (entry.info.botPlayers > 0) DetailRow("Bots", entry.info.botPlayers.toString())
                     if (entry.info.map.isNotEmpty()) DetailRow("Map", entry.info.map)
-                    if (entry.info.ping > 0) DetailRow("Ping", "${entry.info.ping} ms")
+                    if (entry.info.ping.isPositive()) DetailRow("Ping", entry.info.ping.toString())
                     if (entry.info.hasPassword) DetailRow("Password", "Yes")
                     if (entry.info.isSecure) DetailRow("VAC", "Enabled")
                     if (entry.info.steamId > 0) DetailRow("Steam ID", entry.info.steamId.toString())

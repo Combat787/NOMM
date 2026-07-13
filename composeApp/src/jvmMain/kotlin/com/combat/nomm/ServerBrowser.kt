@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 enum class ModStatus {
     MATCH,
@@ -184,7 +186,7 @@ object ServerBrowser {
             players = details.players,
             maxPlayers = details.maxPlayers,
             botPlayers = details.botPlayers,
-            ping = details.ping,
+            ping = details.ping.milliseconds,
             hasPassword = details.hasPassword(),
             isSecure = details.isSecure,
             steamId = SteamNativeHandle.getNativeHandle(details.steamID),
@@ -196,7 +198,7 @@ object ServerBrowser {
             gameDescription = details.gameDescription,
             appId = details.appID,
             serverVersion = details.serverVersion,
-            timeLastPlayed = details.timeLastPlayed,
+            timeLastPlayed = Instant.fromEpochSeconds(details.timeLastPlayed.toLong()),
         )
 
         val isFav = ServerFavorites.isFavorited(ip, gamePort)
