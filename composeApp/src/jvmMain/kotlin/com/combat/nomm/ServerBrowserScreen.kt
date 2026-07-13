@@ -16,7 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
-import nuclearoptionmodmanager.composeapp.generated.resources.add_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
@@ -26,7 +26,6 @@ fun ServerBrowserScreen(
     var searchQuery by remember { mutableStateOf("") }
     val serverList by ServerBrowser.servers.collectAsState()
     val isLoading by ServerBrowser.isLoading.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
 
     val filteredServers = remember(serverList, searchQuery) {
         if (searchQuery.isBlank()) serverList
@@ -52,16 +51,18 @@ fun ServerBrowserScreen(
         placeholder = "Search servers...",
         buttons =  {
             Button(
-                onClick = { showAddDialog = true },
-                modifier = Modifier.fillMaxHeight().clip(MaterialTheme.shapes.small).clipToBounds()
-                    .pointerHoverIcon(PointerIcon.Hand),
+                onClick = { ServerBrowser.refreshAll() },
+                modifier = Modifier.fillMaxHeight().pointerHoverIcon(PointerIcon.Hand),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary,
                     contentColor = MaterialTheme.colorScheme.onSecondary,
                 ),
                 shape = MaterialTheme.shapes.small,
             ) {
-                Icon(painterResource(Res.drawable.add_24px), "Add Server")
+                Icon(
+                    painterResource(Res.drawable.refresh_24px),
+                    null,
+                )
             }
         },
         items = filteredServers,
@@ -69,76 +70,6 @@ fun ServerBrowserScreen(
         itemContent = { entry ->
             ServerItem(entry = entry, onClick = { onOpenServer(entry.fav.ip, entry.fav.gamePort) })
         }
-    )
-
-    if (showAddDialog) {
-        AddServerDialog(
-            onDismiss = { showAddDialog = false },
-            onAdd = { ip, gamePort, name ->
-                ServerFavorites.add(ip, gamePort, name)
-                showAddDialog = false
-                ServerBrowser.refreshAll()
-            }
-        )
-    }
-}
-
-@Composable
-private fun AddServerDialog(
-    onDismiss: () -> Unit,
-    onAdd: (String, Int, String?) -> Unit,
-) {
-    var ip by remember { mutableStateOf("") }
-    var portText by remember { mutableStateOf("7777") }
-    var name by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add Server") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = ip,
-                    onValueChange = { ip = it },
-                    label = { Text("IP Address") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("145.40.186.156") },
-                )
-                OutlinedTextField(
-                    value = portText,
-                    onValueChange = { portText = it.filter { c -> c.isDigit() } },
-                    label = { Text("Game Port") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("7777") },
-                )
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("My Server") },
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val gamePort = portText.toIntOrNull() ?: 7777
-                    onAdd(ip.trim(), gamePort, name.trim().ifEmpty { null })
-                },
-                enabled = ip.isNotBlank(),
-            ) {
-                Text("Add")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
     )
 }
 
@@ -166,7 +97,6 @@ fun ServerItem(entry: ServerEntry, onClick: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun ServerCard(entry: ServerEntry, onClick: () -> Unit) {
     Card(
