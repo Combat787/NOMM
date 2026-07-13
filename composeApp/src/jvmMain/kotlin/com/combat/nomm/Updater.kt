@@ -1,9 +1,9 @@
 package com.combat.nomm
 
-import io.github.kdroidfilter.nucleus.core.runtime.Platform
-import io.github.kdroidfilter.nucleus.nativehttp.NativeHttpClient
-import io.github.kdroidfilter.nucleus.updater.NucleusUpdater
-import io.github.kdroidfilter.nucleus.updater.provider.UpdateProvider
+import dev.nucleusframework.core.runtime.Platform
+import dev.nucleusframework.nativehttp.NativeHttpClient
+import dev.nucleusframework.updater.NucleusUpdater
+import dev.nucleusframework.updater.provider.UpdateProvider
 
 val updater = NucleusUpdater {
     provider = object : UpdateProvider {

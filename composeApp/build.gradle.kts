@@ -1,21 +1,25 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.CompressionLevel
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.PublishMode
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.ReleaseChannel
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.ReleaseType
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.TargetFormat
+import dev.nucleusframework.desktop.application.dsl.CompressionLevel
+import dev.nucleusframework.desktop.application.dsl.PublishMode
+import dev.nucleusframework.desktop.application.dsl.ReleaseChannel
+import dev.nucleusframework.desktop.application.dsl.ReleaseType
+import dev.nucleusframework.desktop.application.dsl.TargetFormat
 
 
 plugins {
         alias(libs.plugins.kotlinMultiplatform)
         alias(libs.plugins.composeMultiplatform)
         alias(libs.plugins.composeCompiler)
+    
+    
         alias(libs.plugins.nucleus)
+    
+    
         alias(libs.plugins.kotlin.serialization)
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.9.1"
+val appVersion = "5.0.0"
 
 val changelog = """
     Fixed exporting/importing Modpacks with Local Mods that are not a single File.
@@ -41,7 +45,9 @@ kotlin {
             implementation(libs.compose.components.resources)
 
             implementation(libs.nucleus.core)
-            implementation(libs.nucleus.window.jni)
+            implementation(libs.nucleus.nucleus.application)
+            implementation(libs.nucleus.decorated.window.tao)
+            implementation(libs.nucleus.window.tao)
             implementation(libs.nucleus.window.material3)
             implementation(libs.nucleus.darkmode)
             implementation(libs.nucleus.taskbar)

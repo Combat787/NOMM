@@ -1,116 +1,30 @@
-name: Build and Release (Complete Suite)
+name: Release
 on:
   push:
-    tags:
-      - '*'
-  workflow_dispatch:
+    tags: ['*']
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-          - os: ubuntu-latest
+          - { os: ubuntu-latest,    arch: amd64 }
+          - { os: windows-latest,   arch: amd64 }
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Nucleus
-        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@main
-
-      - name: Install Linux Packaging Tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-
-      - name: Build
-        run: |
-          chmod +x gradlew
-          ./gradlew packageReleaseDistributionForCurrentOS
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@main
         with:
-          name: app-artifacts-${{ matrix.os }}
-          # THE ULTIMATE PATH FIX:
-          # We grab everything in the 'binaries/main-release' directory 
-          # BUT we explicitly exclude the 'app' directory where java.exe lives.
-          path: |
-            **/build/compose/binaries/main-release/*/*
-            !**/build/compose/binaries/main-release/app/**
-          if-no-files-found: warn
-
-  publish:
-    name: Publish Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
+          jbr-version: '25.0.2b329.66'
+          packaging-tools: 'true'
+          flatpak: 'true'
+          snap: 'true'
+      - run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
+      - uses: actions/upload-artifact@v4
         with:
-          path: downloaded-files
-          pattern: app-artifacts-*
-
-      - name: Flatten and Sort
-        run: |
-          mkdir -p final-assets
-          mkdir -p temp-metadata/release-assets-Windows
-          mkdir -p temp-metadata/release-assets-Linux
-          
-          # 1. Collect all installers/binaries
-          find downloaded-files -type f \( \
-            -name "*.msi" -o \
-            -name "*.exe" -o \
-            -name "*.zip" -o \
-            -name "*.deb" -o \
-            -name "*.rpm" -o \
-            -name "*.flatpak" -o \
-            -name "*.AppImage" \
-          \) -exec cp -v {} final-assets/ \;
-
-          # 2. Feed Windows Metadata (MSI, Portable EXE, Win ZIP)
-          cp final-assets/*.msi temp-metadata/release-assets-Windows/ 2>/dev/null || true
-          cp final-assets/*win*.exe temp-metadata/release-assets-Windows/ 2>/dev/null || true
-          cp final-assets/*win*.zip temp-metadata/release-assets-Windows/ 2>/dev/null || true
-          
-          # 3. Feed Linux Metadata (DEB, RPM, AppImage, Flatpak, Linux ZIP)
-          cp final-assets/*.deb temp-metadata/release-assets-Linux/ 2>/dev/null || true
-          cp final-assets/*.rpm temp-metadata/release-assets-Linux/ 2>/dev/null || true
-          cp final-assets/*.AppImage temp-metadata/release-assets-Linux/ 2>/dev/null || true
-          cp final-assets/*.flatpak temp-metadata/release-assets-Linux/ 2>/dev/null || true
-          cp final-assets/*linux*.zip temp-metadata/release-assets-Linux/ 2>/dev/null || true
-
-      - name: Generate Metadata
-        uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
-        with:
-          artifacts-path: temp-metadata
-          version: ${{ github.ref_name }}
-
-      - name: Finalize
-        run: |
-          [ -d "temp-metadata/update-yml" ] && mv temp-metadata/update-yml/*.yml final-assets/
-          rm -rf temp-metadata
-          echo "Final asset list:"
-          ls -F final-assets
-
-      - name: Publish Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: final-assets/*
-          tag_name: ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: release-assets-${{ runner.os }}-${{ matrix.arch }}
+          path: build/compose/binaries/main/**/*

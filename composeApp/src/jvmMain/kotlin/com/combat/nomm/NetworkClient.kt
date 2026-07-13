@@ -1,6 +1,6 @@
 package com.combat.nomm
 
-import io.github.kdroidfilter.nucleus.nativehttp.ktor.installNativeSsl
+import dev.nucleusframework.nativehttp.ktor.installNativeSsl
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*

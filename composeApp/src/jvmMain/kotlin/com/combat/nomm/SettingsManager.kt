@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.WindowPlacement
 import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
-import io.github.kdroidfilter.nucleus.updater.UpdateInfo
+import dev.nucleusframework.updater.UpdateInfo
 import io.github.vinceglb.filekit.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
