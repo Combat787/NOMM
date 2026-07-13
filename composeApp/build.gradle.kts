@@ -32,10 +32,6 @@ kotlin {
     jvm()
     jvmToolchain(25)
     sourceSets {
-        
-        all {
-            languageSettings.enableLanguageFeature("ExplicitBackingFields")
-        }
         commonMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.compose.runtime)

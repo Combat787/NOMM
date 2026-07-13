@@ -15,13 +15,15 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
 import kotlinx.coroutines.delay
 import nuclearoptionmodmanager.composeapp.generated.resources.*
-import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
+import kotlin.time.Duration.Companion.milliseconds
 
-private enum class ServerDetailTab { Details, Modlist }
 
 @Composable
 fun ServerDetailScreen(
@@ -56,129 +58,101 @@ fun ServerDetailScreen(
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(5000)
+            delay(5000.milliseconds)
             ServerBrowser.refreshSteamServers()
         }
     }
+    val backStack = rememberNavBackStack(ServerNavigation.config, ServerNavigation.Details)
+    val currentKey = backStack.lastOrNull() ?: ServerNavigation.Details
 
-    var selectedTab by remember { mutableStateOf(ServerDetailTab.Details) }
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        ServerTitleCard(entry, onBack)
-
-        ServerNavigationBar(selectedTab) { selectedTab = it }
-
-        Box(
-            modifier = Modifier.weight(1f).fillMaxWidth().clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
-            when (selectedTab) {
-                ServerDetailTab.Details -> ServerDetailsContent(entry)
-                ServerDetailTab.Modlist -> ServerModlistContent(entry, isInstalling, installStatuses)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ServerTitleCard(entry: ServerEntry, onBack: () -> Unit) {
-    val isInstalling by ServerBrowser.isInstalling.collectAsState()
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            SelectionContainer(modifier = Modifier.weight(1f)) {
-                Column {
-                    Text(
-                        text = entry.displayName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (entry.info != null) {
-                        Text(
-                            text = "${entry.fav.ip}:${entry.fav.gamePort}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.height(IntrinsicSize.Min),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                    if (entry.info != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Icon(painterResource(Res.drawable.person_24px), null, Modifier.size(24.dp))
-                            Text(
-                                "${entry.info.players}/${entry.info.maxPlayers}",
-                                style = MaterialTheme.typography.labelLargeEmphasized,
-                                maxLines = 1,
-                            )
-                        }
-                        if (entry.info.map.isNotEmpty()) {
-                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                            Text(
-                                entry.info.map,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                            )
-                        }
-                        if (entry.info.ping > 0) {
-                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                            Text(
-                                "${entry.info.ping}ms",
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                    }
+    DetailScreen(
+        backStack = backStack,
+        currentKey = currentKey,
+        keys = listOf(
+            Triple(
+                ServerNavigation.Details,
+                "Details",
+                Res.drawable.info_24px,
+            ),
+            Triple(
+                ServerNavigation.Modpack,
+                "Modpack",
+                Res.drawable.package_24px,
+            )
+        ),
+        title = entry.displayName,
+        subtitle = "${entry.fav.ip}:${entry.fav.gamePort}",
+        details = {
+            ServerDetails(entry)
+        },
+        buttons = { controlSize, iconSize ->
+            ServerActions(entry, isInstalling, controlSize, iconSize)
+        },
+        onBack = onBack,
+        content = {
+            entryProvider {
+                entry<ServerNavigation.Details> {
+                    ServerDetailsContent(entry)
+                }
+                entry<ServerNavigation.Modpack> {
+                    ServerModlistContent(entry, isInstalling, installStatuses)
                 }
             }
+        }
 
-            ServerActions(entry, isInstalling)
+    )
+}
 
-            IconButton(
-                onClick = onBack,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-                modifier = Modifier.size(40.dp).clip(CircleShape).clipToBounds()
-                    .pointerHoverIcon(PointerIcon.Hand),
+
+@Composable
+fun ServerDetails(
+    entry: ServerEntry,
+) {
+    Row(
+        modifier = Modifier.height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (entry.info != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Icon(
-                    painter = painterResource(Res.drawable.close_24px),
-                    contentDescription = "Close",
-                    modifier = Modifier.size(28.dp),
+                Icon(painterResource(Res.drawable.group_24px), null, Modifier.size(24.dp))
+                Text(
+                    "${entry.info.players}/${entry.info.maxPlayers}",
+                    style = MaterialTheme.typography.labelLargeEmphasized,
+                    maxLines = 1,
+                )
+            }
+            if (entry.info.map.isNotEmpty()) {
+                VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+                Text(
+                    entry.info.map,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                )
+            }
+            if (entry.info.ping > 0) {
+                VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+                Text(
+                    "${entry.info.ping}ms",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
                 )
             }
         }
     }
 }
 
+
 @Composable
-private fun ServerActions(entry: ServerEntry, isInstalling: Boolean) {
+fun ServerActions(
+    entry: ServerEntry,
+    isInstalling: Boolean,
+    controlSize: Dp = 40.dp,
+    iconSize: Dp = 24.dp,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -192,40 +166,53 @@ private fun ServerActions(entry: ServerEntry, isInstalling: Boolean) {
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ) {
-                        Text("Install ${entry.modsToInstall.size} Missing Mods", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            "Install ${entry.modsToInstall.size} Missing Mods",
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 },
             ) {
                 IconButton(
                     onClick = { ServerBrowser.installMissingMods(entry) },
-                    modifier = Modifier.size(40.dp).clip(CircleShape).clipToBounds()
+                    modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds()
                         .pointerHoverIcon(PointerIcon.Hand),
                 ) {
                     Icon(
                         painter = painterResource(Res.drawable.download_24px),
                         contentDescription = "Install Missing Mods",
-                        modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(iconSize),
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
         } else if (isInstalling) {
-            Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+            Box(modifier = Modifier.size(controlSize), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(controlSize * 1.2f),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
 
         TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                TooltipAnchorPosition.Above
+            ),
             state = rememberTooltipState(),
             tooltip = {
                 PlainTooltip(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxWidth = Dp.Unspecified,
                 ) {
                     Text(
-                        if (entry.modlist != null) "Launch with these mods" else "Launch Vanilla",
+                        text = if (entry.modlist != null) "Launch with these mods" else "Launch Vanilla",
                         style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Visible,
                     )
                 }
             },
@@ -235,13 +222,13 @@ private fun ServerActions(entry: ServerEntry, isInstalling: Boolean) {
                     if (entry.modlist != null) ServerBrowser.launchWithMods(entry)
                     else ServerBrowser.launchVanilla()
                 },
-                modifier = Modifier.size(40.dp).clip(CircleShape).clipToBounds()
+                modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds()
                     .pointerHoverIcon(PointerIcon.Hand),
             ) {
                 Icon(
                     painter = painterResource(Res.drawable.play_circle_24px),
                     contentDescription = "Launch",
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(iconSize),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -264,85 +251,18 @@ private fun ServerActions(entry: ServerEntry, isInstalling: Boolean) {
         ) {
             IconButton(
                 onClick = { ServerBrowser.toggleFavorite(entry) },
-                modifier = Modifier.size(40.dp).clip(CircleShape).clipToBounds()
+                modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds()
                     .pointerHoverIcon(PointerIcon.Hand),
             ) {
                 Icon(
                     painter = painterResource(
-                        if (entry.isFavorite) Res.drawable.star_24px else Res.drawable.star_outline_24px
+                        if (entry.isFavorite) Res.drawable.favorite_filled_24px else Res.drawable.favorite_24px
                     ),
                     contentDescription = "Favorite",
-                    modifier = Modifier.size(28.dp),
-                    tint = if (entry.isFavorite) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(iconSize),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ServerNavigationBar(selectedTab: ServerDetailTab, onSelect: (ServerDetailTab) -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = CircleShape,
-        modifier = Modifier.width(IntrinsicSize.Min).height(IntrinsicSize.Min),
-    ) {
-        Row(
-            modifier = Modifier.padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        ) {
-            ServerNavItem(
-                selected = selectedTab == ServerDetailTab.Details,
-                label = "Details",
-                icon = Res.drawable.info_24px,
-            ) { onSelect(ServerDetailTab.Details) }
-
-            ServerNavItem(
-                selected = selectedTab == ServerDetailTab.Modlist,
-                label = "Modlist",
-                icon = Res.drawable.download_24px,
-            ) { onSelect(ServerDetailTab.Modlist) }
-        }
-    }
-}
-
-@Composable
-private fun ServerNavItem(
-    selected: Boolean,
-    label: String,
-    icon: DrawableResource,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val backgroundColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
-    else Color.Transparent
-
-    val contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-    else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Box(
-        modifier = modifier.fillMaxHeight().clip(CircleShape).background(backgroundColor)
-            .pointerHoverIcon(PointerIcon.Hand).clickable(onClick = onClick).padding(8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        ) {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = contentColor,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor,
-            )
         }
     }
 }
@@ -436,10 +356,20 @@ private fun ServerModlistContent(entry: ServerEntry, isInstalling: Boolean, inst
                     ModSection("To Install (${mods.size})", MaterialTheme.colorScheme.tertiary, mods, installStatuses)
                 }
                 grouped[ModStatus.VERSION_MISMATCH]?.let { mods ->
-                    ModSection("Version Mismatch (${mods.size})", MaterialTheme.colorScheme.error, mods, installStatuses)
+                    ModSection(
+                        "Version Mismatch (${mods.size})",
+                        MaterialTheme.colorScheme.error,
+                        mods,
+                        installStatuses
+                    )
                 }
                 grouped[ModStatus.NOT_IN_REPO]?.let { mods ->
-                    ModSection("Not in Repository (${mods.size})", MaterialTheme.colorScheme.outline, mods, installStatuses)
+                    ModSection(
+                        "Not in Repository (${mods.size})",
+                        MaterialTheme.colorScheme.outline,
+                        mods,
+                        installStatuses
+                    )
                 }
                 Spacer(Modifier.height(0.dp))
             }
@@ -484,7 +414,12 @@ private fun DetailRow(label: String, value: String) {
 }
 
 @Composable
-private fun ModSection(title: String, color: Color, mods: List<ServerModStatus>, installStatuses: Map<String, TaskState> = emptyMap()) {
+private fun ModSection(
+    title: String,
+    color: Color,
+    mods: List<ServerModStatus>,
+    installStatuses: Map<String, TaskState> = emptyMap()
+) {
     var expanded by remember { mutableStateOf(false) }
     val shownMods = if (expanded) mods else mods.take(10)
 
@@ -513,7 +448,11 @@ private fun ModSection(title: String, color: Color, mods: List<ServerModStatus>,
                         TaskState.Phase.DOWNLOADING -> "Downloading"
                         TaskState.Phase.EXTRACTING -> "Extracting"
                     }
-                    Text(progressText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+                    Text(
+                        progressText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
                 } else {
                     Text(versionText, style = MaterialTheme.typography.bodySmall, color = color)
                 }

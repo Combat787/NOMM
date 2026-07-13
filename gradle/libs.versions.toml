@@ -1,22 +1,23 @@
 [versions]
 composeHotReload = "1.1.1"
 composeMultiplatform = "1.11.0"
-kotlin = "2.3.20"
+kotlin = "2.4.0"
 kotlinx-coroutines = "1.11.0"
 ktor = "3.5.0"
 material3 = "1.11.0-alpha07"
-nucleus = "1.15.5"
+nucleus = "1.15.7"
 
 kotlinx-serialization = "1.11.0"
 kotlinx-datetime = "0.8.0"
 
-filekit = "0.14.1"
+filekit = "0.14.2"
 
 
 materialKolor = "5.0.0-alpha07"
 steamworks4j = "1.10.0"
 
 multiplatform-nav3-ui = "1.1.1"
+foundationDesktop = "1.7.0"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }

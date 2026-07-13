@@ -62,7 +62,6 @@ object NetworkClient {
             val version = if (versionResponse.status.isSuccess()) {
                 json.decodeFromString<Version>(versionResponse.bodyAsText())
             } else return@runCatching null
-            println(version)
             if (SettingsManager.cachedManifest.value.manifest == version && !SettingsManager.config.value.ignoreManifestVersion) {
                 return@runCatching null
             }

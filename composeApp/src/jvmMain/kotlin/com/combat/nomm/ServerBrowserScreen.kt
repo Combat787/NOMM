@@ -1,9 +1,6 @@
 package com.combat.nomm
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,13 +10,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.add_24px
-import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
-import nuclearoptionmodmanager.composeapp.generated.resources.sync_24px
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
@@ -40,8 +37,6 @@ fun ServerBrowserScreen(
         }
     }
 
-    val state = rememberLazyListState()
-
     LaunchedEffect(Unit) {
         ServerBrowser.load()
     }
@@ -51,117 +46,30 @@ fun ServerBrowserScreen(
         ServerBrowser.refreshModStatuses()
     }
 
-    Row(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.padding(top = 16.dp).height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+    ListScreen(
+        query = searchQuery,
+        onQueryChange = { searchQuery = it },
+        placeholder = "Search servers...",
+        buttons =  {
+            Button(
+                onClick = { showAddDialog = true },
+                modifier = Modifier.fillMaxHeight().clip(MaterialTheme.shapes.small).clipToBounds()
+                    .pointerHoverIcon(PointerIcon.Hand),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                ),
+                shape = MaterialTheme.shapes.small,
             ) {
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = "Search servers...",
-                )
-                Button(
-                    onClick = { showAddDialog = true },
-                    modifier = Modifier.fillMaxHeight().clip(MaterialTheme.shapes.small).clipToBounds()
-                        .pointerHoverIcon(PointerIcon.Hand),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary,
-                    ),
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Icon(painterResource(Res.drawable.add_24px), "Add Server")
-                }
-                Button(
-                    onClick = { ServerBrowser.refreshAll() },
-                    modifier = Modifier.fillMaxHeight().clip(MaterialTheme.shapes.small).clipToBounds()
-                        .pointerHoverIcon(PointerIcon.Hand),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary,
-                    ),
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Icon(
-                        painterResource(if (isLoading) Res.drawable.sync_24px else Res.drawable.refresh_24px),
-                        null,
-                    )
-                }
+                Icon(painterResource(Res.drawable.add_24px), "Add Server")
             }
-
-            if (serverList.isNotEmpty()) {
-                Text(
-                    "${serverList.size} servers found",
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 16.dp, top = 8.dp),
-                state = state,
-            ) {
-                if (filteredServers.isEmpty() && !isLoading) {
-                    item {
-                        Text(
-                            if (serverList.isEmpty()) "Discovering servers..."
-                            else "No servers match your search.",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-                }
-
-                val favEntries = filteredServers.filter { !it.isDiscovered }
-                val discoveredEntries = filteredServers.filter { it.isDiscovered }
-
-                if (favEntries.isNotEmpty()) {
-                    item {
-                        Text(
-                            "Favorites",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    items(favEntries, key = { "fav:${it.fav.ip}:${it.fav.gamePort}" }) { entry ->
-                        ServerCard(entry = entry, onClick = { onOpenServer(entry.fav.ip, entry.fav.gamePort) })
-                    }
-                }
-
-                if (discoveredEntries.isNotEmpty() && favEntries.isNotEmpty()) {
-                    item {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                        )
-                    }
-                }
-
-                if (discoveredEntries.isNotEmpty()) {
-                    item {
-                        Text(
-                            "All Servers",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    items(discoveredEntries, key = { "disc:${it.fav.ip}:${it.fav.gamePort}" }) { entry ->
-                        ServerCard(entry = entry, onClick = { onOpenServer(entry.fav.ip, entry.fav.gamePort) })
-                    }
-                }
-            }
+        },
+        items = filteredServers,
+        key = { "disc:${it.fav.ip}:${it.fav.gamePort}" },
+        itemContent = { entry ->
+            ServerItem(entry = entry, onClick = { onOpenServer(entry.fav.ip, entry.fav.gamePort) })
         }
-    }
+    )
 
     if (showAddDialog) {
         AddServerDialog(
@@ -231,6 +139,30 @@ private fun AddServerDialog(
                 Text("Cancel")
             }
         },
+    )
+}
+
+
+@Composable
+fun ServerItem(entry: ServerEntry, onClick: () -> Unit) {
+    val isInstalling by ServerBrowser.isInstalling.collectAsState()
+    ListScreenItem(
+        buildAnnotatedString {
+            withStyle(
+                MaterialTheme.typography.titleMedium.toSpanStyle()
+                    .copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Black)
+            ) {
+                append(entry.displayName)
+            }
+        },
+        "",
+        onClick = onClick,
+        details = {
+            ServerDetails(entry = entry)
+        },
+        actions = {
+            ServerActions(entry, isInstalling)
+        }
     )
 }
 

@@ -1,10 +1,6 @@
 package com.combat.nomm
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.WindowPlacement
 import com.materialkolor.Contrast
@@ -68,10 +64,11 @@ object SettingsManager {
 
 
     val criticalInformation = mutableStateListOf<Triple<String, String, Continuation<Unit>?>>()
-    
+
     var availableUpdateInfo by mutableStateOf<UpdateInfo?>(null)
 
-    val gameFolder: File? = config.value.gamePath?.let { File(it) }
+    val gameFolder: File?
+        get() = config.value.gamePath?.let { File(it) }
     val bepInExFolder: File?
         get() = gameFolder?.let { File(it, "BepInEx") }
 
@@ -95,7 +92,7 @@ object SettingsManager {
         }
 
         val path = getGameFolder("Nuclear Option", "NuclearOption.exe")?.path
-        val default = Configuration(gamePath = path,)
+        val default = Configuration(gamePath = path)
         saveSignal.tryEmit(Unit)
         default
     }
@@ -116,7 +113,7 @@ object SettingsManager {
             saveCachedManifest()
         }
     }
-    
+
     fun updateConfig(newConfig: Configuration) {
         config.value = newConfig
         saveSignal.tryEmit(Unit)

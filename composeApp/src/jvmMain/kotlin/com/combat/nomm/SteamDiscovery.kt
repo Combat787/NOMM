@@ -1,21 +1,30 @@
 package com.combat.nomm
 
 import com.codedisaster.steamworks.*
-import com.codedisaster.steamworks.SteamMatchmakingServerListResponse.Response
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
-import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.milliseconds
 
 object SteamDiscovery {
     private const val APP_ID = 2168680
 
     private var matchmaking: SteamMatchmakingServers? = null
     private var currentRequest: SteamServerListRequest? = null
-    private var callbackThread: Thread? = null
     private var running = false
 
+    val lock = Mutex(false)
+    var callbackJob: Job? = null
+    
+    
     val isRefreshing: StateFlow<Boolean>
         field = MutableStateFlow(false)
 
@@ -30,103 +39,106 @@ object SteamDiscovery {
         VersionMismatch,
     }
 
-    @Synchronized
-    fun init(): InitStatus {
-        if (initResult.value == InitStatus.OK) return InitStatus.OK
-        if (running) return InitStatus.NotInitialized
+    suspend fun init(): InitStatus {
+        lock.withLock {
+            if (initResult.value == InitStatus.OK) return InitStatus.OK
+            if (running) return InitStatus.NotInitialized
 
-        println("[NOMM] init() starting full initialization")
-        extractSteamAppId()
+            println("[NOMM] init() starting full initialization")
+            extractSteamAppId()
 
-        val loaded = SteamAPI.loadLibraries(object : SteamLibraryLoader {
-            override fun loadLibrary(name: String): Boolean {
-                val isWindows = System.getProperty("os.name").lowercase().contains("win")
-                val isMac = System.getProperty("os.name").lowercase().contains("mac")
-                val is64Bit = System.getProperty("os.arch").lowercase().let {
-                    it.contains("64") || it.contains("aarch64") || it.contains("arm64")
-                }
-                val isArm = System.getProperty("os.arch").lowercase().let {
-                    it.contains("aarch64") || it.contains("arm64")
-                }
+            val loaded = SteamAPI.loadLibraries(object : SteamLibraryLoader {
+                override fun loadLibrary(name: String): Boolean {
+                    val isWindows = System.getProperty("os.name").lowercase().contains("win")
+                    val isMac = System.getProperty("os.name").lowercase().contains("mac")
+                    val is64Bit = System.getProperty("os.arch").lowercase().let {
+                        it.contains("64") || it.contains("aarch64") || it.contains("arm64")
+                    }
+                    val isArm = System.getProperty("os.arch").lowercase().let {
+                        it.contains("aarch64") || it.contains("arm64")
+                    }
 
-                val candidates = mutableListOf<String>()
-                if (isWindows) {
-                    if (is64Bit) candidates.add("${name}64.dll")
-                    candidates.add("$name.dll")
-                } else if (isMac) {
-                    if (isArm) candidates.add("lib${name}arm64.dylib")
-                    candidates.add("lib${name}.dylib")
-                } else {
-                    if (is64Bit && !isArm) candidates.add("lib${name}64.so")
-                    if (isArm) candidates.add("lib${name}_arm64.so")
-                    candidates.add("lib${name}.so")
-                }
+                    val candidates = mutableListOf<String>()
+                    if (isWindows) {
+                        if (is64Bit) candidates.add("${name}64.dll")
+                        candidates.add("$name.dll")
+                    } else if (isMac) {
+                        if (isArm) candidates.add("lib${name}arm64.dylib")
+                        candidates.add("lib${name}.dylib")
+                    } else {
+                        if (is64Bit && !isArm) candidates.add("lib${name}64.so")
+                        if (isArm) candidates.add("lib${name}_arm64.so")
+                        candidates.add("lib${name}.so")
+                    }
 
-                for (candidate in candidates) {
-                    val stream = javaClass.getResourceAsStream("/$candidate") ?: continue
-                    val tmpDir = File(System.getProperty("java.io.tmpdir"), "steamworks4j")
-                    tmpDir.mkdirs()
-                    val tmpFile = File(tmpDir, candidate)
-                    tmpFile.writeBytes(stream.readBytes())
-                    stream.close()
+                    for (candidate in candidates) {
+                        val stream = javaClass.getResourceAsStream("/$candidate") ?: continue
+                        val tmpDir = File(System.getProperty("java.io.tmpdir"), "steamworks4j")
+                        tmpDir.mkdirs()
+                        val tmpFile = File(tmpDir, candidate)
+                        tmpFile.writeBytes(stream.readBytes())
+                        stream.close()
+                        try {
+                            System.load(tmpFile.absolutePath)
+                            println("[NOMM] Loaded native: $candidate")
+                            return true
+                        } catch (e: UnsatisfiedLinkError) {
+                            println("[NOMM] Failed to load $candidate: ${e.message}")
+                        }
+                    }
+
                     try {
-                        System.load(tmpFile.absolutePath)
-                        println("[NOMM] Loaded native: $candidate")
+                        System.loadLibrary(name)
                         return true
                     } catch (e: UnsatisfiedLinkError) {
-                        println("[NOMM] Failed to load $candidate: ${e.message}")
+                        println("[NOMM] loadLibrary($name) failed: ${e.message}")
                     }
+
+                    println("[NOMM] Could not load native: $name")
+                    return false
+                }
+            })
+
+            if (!loaded) {
+                println("[NOMM] Failed to load Steam native libraries")
+                initResult.value = InitStatus.FailedGeneric
+                return InitStatus.FailedGeneric
+            }
+
+            val result = when (SteamAPI.initEx()) {
+                SteamAPI.InitResult.OK -> {
+                    running = true
+                    startCallbackLoop()
+                    matchmaking = SteamMatchmakingServers()
+                    InitStatus.OK
                 }
 
-                try {
-                    System.loadLibrary(name)
-                    return true
-                } catch (e: UnsatisfiedLinkError) {
-                    println("[NOMM] loadLibrary($name) failed: ${e.message}")
-                }
-
-                println("[NOMM] Could not load native: $name")
-                return false
+                SteamAPI.InitResult.NoSteamClient -> InitStatus.NoSteamClient
+                SteamAPI.InitResult.VersionMismatch -> InitStatus.VersionMismatch
+                SteamAPI.InitResult.FailedGeneric -> InitStatus.FailedGeneric
             }
-        })
 
-        if (!loaded) {
-            println("[NOMM] Failed to load Steam native libraries")
-            initResult.value = InitStatus.FailedGeneric
-            return InitStatus.FailedGeneric
+            initResult.value = result
+            println("[NOMM] Steam init: $result")
+            return result
         }
-
-        val result = when (SteamAPI.initEx()) {
-            SteamAPI.InitResult.OK -> {
-                running = true
-                startCallbackThread()
-                matchmaking = SteamMatchmakingServers()
-                InitStatus.OK
-            }
-            SteamAPI.InitResult.NoSteamClient -> InitStatus.NoSteamClient
-            SteamAPI.InitResult.VersionMismatch -> InitStatus.VersionMismatch
-            SteamAPI.InitResult.FailedGeneric -> InitStatus.FailedGeneric
-        }
-
-        initResult.value = result
-        println("[NOMM] Steam init: $result")
-        return result
     }
 
-    @Synchronized
-    fun shutdown() {
-        println("[NOMM] Steam shutdown")
-        if (initResult.value != InitStatus.OK) return
-        running = false
-        cancelQuery()
-        callbackThread?.let { thread ->
-            thread.interrupt()
-            thread.join(2000)
+    suspend fun shutdown() {
+        lock.withLock {
+            println("[NOMM] Steam shutdown")
+            if (initResult.value != InitStatus.OK) return
+
+            running = false
+            cancelQuery()
+
+            callbackJob?.cancelAndJoin()
+            callbackJob = null
+
+            SteamAPI.shutdown()
+            initResult.value = InitStatus.NotInitialized
+            matchmaking = null
         }
-        callbackThread = null
-        SteamAPI.shutdown()
-        initResult.value = InitStatus.NotInitialized
-        matchmaking = null
     }
 
     fun requestServerList(filters: List<SteamMatchmakingKeyValuePair> = emptyList()) {
@@ -170,21 +182,21 @@ object SteamDiscovery {
         isRefreshing.value = false
     }
 
-    private fun startCallbackThread() {
-        callbackThread = thread(isDaemon = true, name = "steamworks-callbacks") {
-            while (running) {
-                try {
-                    SteamAPI.runCallbacks()
-                    Thread.sleep(66)
-                } catch (_: InterruptedException) {
-                    break
-                } catch (e: Exception) {
-                    println("[NOMM] Callback thread error: ${e.message}")
-                    break
+    private fun startCallbackLoop() {
+            callbackJob = scope.launch {
+                while (isActive && running) {
+                    try {
+                        SteamAPI.runCallbacks()
+                        delay(66.milliseconds)
+                    } catch (e: CancellationException) {
+                        break
+                    } catch (e: Exception) {
+                        println("[NOMM] Callback loop error: ${e.message}")
+                        break
+                    }
                 }
             }
         }
-    }
 
     fun parseModlistUrlFromName(serverName: String): String? {
         val regex = Regex("""\[nomm:(.+?)]""")

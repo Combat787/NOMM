@@ -66,7 +66,7 @@ fun MainNavigationRail(
                     backStack.clear()
                     backStack.add(MainNavigation.Servers)
                 },
-                drawableResource = Res.drawable.server_24px,
+                drawableResource = Res.drawable.lists_24px,
                 label = "Servers"
             )
             RailDestination(

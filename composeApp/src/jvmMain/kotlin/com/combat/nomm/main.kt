@@ -119,7 +119,9 @@ fun main(args: Array<String>) {
                         SettingsManager.saveConfig()
                         SettingsManager.saveCachedManifest()
                     }
-                    SteamDiscovery.shutdown()
+                    runBlocking {
+                        SteamDiscovery.shutdown()
+                    }
                     exitApplication()
                 },
                 title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",

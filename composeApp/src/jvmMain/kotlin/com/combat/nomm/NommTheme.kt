@@ -2,7 +2,6 @@ package com.combat.nomm
 
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -18,7 +17,6 @@ import nuclearoptionmodmanager.composeapp.generated.resources.JetBrainsMono
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import org.jetbrains.compose.resources.Font
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NOMMTheme(
     color: Color,

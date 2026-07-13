@@ -1,9 +1,6 @@
 package com.combat.nomm
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,7 +9,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
-import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,20 +17,20 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.navigation3.runtime.NavBackStack
-import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.ui.NavDisplay
 import nuclearoptionmodmanager.composeapp.generated.resources.*
-import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
+
 
 @Composable
 fun ModDetailScreen(
@@ -45,170 +41,153 @@ fun ModDetailScreen(
     val mod = RepoMods.mods.collectAsState().value.find { it.id == modId }
         ?: SettingsManager.cachedManifest.value.manifest.find { it.id == modId } ?: run { onBack(); return }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        val backStack = rememberNavBackStack(ModNavigation.config, ModNavigation.Details)
-        val currentKey = backStack.lastOrNull() ?: ModNavigation.Details
+    val backStack = rememberNavBackStack(ModNavigation.config, ModNavigation.Details)
+    val currentKey = backStack.lastOrNull() ?: ModNavigation.Details
 
-        ModTitleCard(
-            mod = mod, onBack = onBack
-        )
-
-        ModNavigationBar(currentKey, backStack)
-
-        Box(
-            modifier = Modifier.weight(1f).fillMaxWidth().clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
-            NavDisplay(
-                backStack = backStack,
-                onBack = { backStack.removeLastOrNull() },
-                transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                entryProvider = entryProvider {
-                    entry<ModNavigation.Details> {
-                        ModDetailsContent(mod)
-                    }
-                    entry<ModNavigation.Versions> {
-                        ModVersionsContent(mod) { version ->
-                            backStack.clear()
-                            backStack.add(ModNavigation.Dependencies(version))
-                        }
-                    }
-                    entry<ModNavigation.Dependencies> { args ->
-                        ModVersionDependenciesContent(mod, args.version, onOpenMod)
-                    }
-                })
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun ModTitleCard(
-    mod: Extension,
-    onBack: () -> Unit,
-) {
-    
     val installedMods by LocalMods.mods.collectAsState()
 
     val modMeta = installedMods[mod.id]
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            SelectionContainer(modifier = Modifier.weight(1f)) {
-                Column {
-                    Text(
-                        text = mod.displayName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = buildAnnotatedString {
-                            if (mod.authors.isNotEmpty()) {
-                                append("by ")
-                                
-                                append(mod.authors.joinToString(", "))
-                                
-                            }
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(8.dp))
 
-                    Row(
-                        modifier = Modifier.height(IntrinsicSize.Min)
-                            .horizontalScroll(rememberScrollState(), enabled = false),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        when {
-                            modMeta == null || !modMeta.isUnidentified -> {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Icon(painterResource(Res.drawable.download_24px), null, Modifier.size(24.dp))
-                                    Text(
-                                        mod.downloadCount.toString(),
-                                        style = MaterialTheme.typography.labelLargeEmphasized,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
+    DetailScreen(
+        backStack = backStack,
+        currentKey = currentKey,
+        keys = listOf(
+            Triple(
+                ModNavigation.Details,
+                "Details",
+                Res.drawable.info_24px,
+            ),
+            Triple(
+                ModNavigation.Versions,
+                "Versions",
+                Res.drawable.list_24px,
+            )
+        ),
+        title = mod.displayName,
+        subtitle = buildString {
+            if (mod.authors.isNotEmpty()) {
+                this.append("by ")
 
-                            else -> {
-                                Icon(painterResource(Res.drawable.computer_24px), null, Modifier.size(24.dp))
-                            }
-                        }
-                        VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                        Text(
-                            if (modMeta?.isUnidentified ?: false) modMeta.file!!.name else mod.id,
-                            style = MaterialTheme.typography.labelMedium, maxLines = 1
-                        )
+                this.append(mod.authors.joinToString(", "))
 
-
-
-                        if (mod.tags.isNotEmpty()) {
-                            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
-                        }
-                        mod.tags.forEach { tag ->
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ) {
-                                Text(
-                                    text = tag,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
             }
-
+        },
+        details = {
+            ModDetails(modMeta, mod)
+        },
+        buttons = { controlSize: Dp, iconSize: Dp ->
             val installStatuses by Installer.installStatuses.collectAsState()
             val installedMods by LocalMods.mods.collectAsState()
             val taskState = installStatuses[mod.id]
             val modMeta = installedMods[mod.id]
-
-            val controlSize = 40.dp
-            val iconSize= 28.dp
             ModActions(taskState, modMeta, mod, controlSize, iconSize)
+        },
+        onBack = onBack,
+        content = {
+            entryProvider {
+                entry<ModNavigation.Details> {
+                    ModDetailsContent(mod)
+                }
+                entry<ModNavigation.Versions> {
+                    ModVersionsContent(mod) { version ->
+                        backStack.clear()
+                        backStack.add(ModNavigation.Dependencies(version))
+                    }
+                }
+                entry<ModNavigation.Dependencies> { args ->
+                    ModVersionDependenciesContent(mod, args.version, onOpenMod)
+                }
+            }
+        }
+    )
+}
 
-            IconButton(
-                onClick = onBack, colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds().pointerHoverIcon(PointerIcon.Hand)
+@Composable
+fun ModDetails(modMeta: ModMeta?, mod: Extension, onTagClick: ((String) -> Unit)? = null) {
+    Row(
+        modifier = Modifier.height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        when {
+            modMeta == null || !modMeta.isUnidentified -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(painterResource(Res.drawable.download_24px), null, Modifier.size(24.dp))
+                    Text(
+                        mod.downloadCount.toString(),
+                        style = MaterialTheme.typography.labelLargeEmphasized,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            else -> {
+                Icon(painterResource(Res.drawable.computer_24px), null, Modifier.size(24.dp))
+            }
+        }
+        VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+        Text(
+            if (modMeta?.isUnidentified ?: false) modMeta.file!!.name else mod.id,
+            style = MaterialTheme.typography.labelMedium, maxLines = 1
+        )
+
+        if (mod.tags.isNotEmpty()) {
+            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+        }
+
+        CompositionLocalProvider(
+            LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState(), enabled = false)
             ) {
-                Icon(
-                    painter = painterResource(Res.drawable.close_24px),
-                    contentDescription = "Close",
-                    modifier = Modifier.size(iconSize)
-                )
+                mod.tags.forEach { tag ->
+                    if (onTagClick != null) {
+                        Card(
+                            onClick = {
+                                onTagClick.invoke(tag)
+                            },
+                            modifier = Modifier.height(IntrinsicSize.Min).semantics { role = Role.Button },
+                            shape = CircleShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                        ) {
+                            Text(
+                                text = tag,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1
+                            )
+                        }
+                    } else {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ) {
+                            Text(
+                                text = tag,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
+
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun ModActions(
     taskState: TaskState?,
     modMeta: ModMeta?,
@@ -261,6 +240,7 @@ fun ModActions(
                     }
                 }
             }
+
             modMeta != null -> {
                 if (modMeta.problems.isNotEmpty()) {
                     BadgedBox(
@@ -396,6 +376,7 @@ fun ModActions(
                     modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                 )
             }
+
             else -> {
                 TooltipBox(
                     positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
@@ -436,80 +417,6 @@ fun ModActions(
 }
 
 @Composable
-private fun ModNavigationBar(
-    currentKey: NavKey,
-    backStack: NavBackStack<NavKey>,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = CircleShape,
-        modifier = Modifier.width(IntrinsicSize.Min).height(IntrinsicSize.Min)
-    ) {
-        Row(
-            modifier = Modifier.padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        ) {
-            NavItem(
-                selected = currentKey is ModNavigation.Details,
-                label = "Details",
-                icon = Res.drawable.info_24px,
-            ) {
-                backStack.clear()
-                backStack.add(ModNavigation.Details)
-            }
-
-            NavItem(
-                selected = currentKey is ModNavigation.Versions,
-                label = "Versions",
-                icon = Res.drawable.list_24px,
-            ) {
-                backStack.clear()
-                backStack.add(ModNavigation.Versions)
-            }
-        }
-    }
-}
-
-@Composable
-private fun NavItem(
-    selected: Boolean,
-    label: String,
-    icon: DrawableResource,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val backgroundColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
-    else Color.Transparent
-
-    val contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-    else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Box(
-        modifier = modifier.fillMaxHeight().clip(CircleShape).background(backgroundColor).pointerHoverIcon(PointerIcon.Hand).clickable(onClick = onClick)
-            .padding(8.dp), contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-        ) {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = contentColor
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor
-            )
-        }
-    }
-}
-
-@Composable
 fun ModDetailsContent(mod: Extension) {
     SelectionContainer {
         val state = rememberScrollState()
@@ -522,8 +429,6 @@ fun ModDetailsContent(mod: Extension) {
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-
-
             Column(
                 modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(state),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -548,12 +453,15 @@ fun ModDetailsContent(mod: Extension) {
                                             append(url)
                                         }
                                     }
-                                }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
-                
+
                 Text(
                     text = mod.description,
                     style = MaterialTheme.typography.bodyLarge,
@@ -600,10 +508,9 @@ fun ModVersionsContent(
     val isScrollable by remember {
         derivedStateOf {
             state.layoutInfo.visibleItemsInfo.size < state.layoutInfo.totalItemsCount ||
-                state.firstVisibleItemScrollOffset > 0
+                    state.firstVisibleItemScrollOffset > 0
         }
     }
-
     Row(
         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -643,8 +550,8 @@ fun ModVersionsContent(
     }
 }
 
+
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun ArtifactCard(
     artifact: Artifact,
     isInstalled: Boolean,
@@ -807,7 +714,7 @@ fun ModVersionDependenciesContent(
     val isScrollable by remember {
         derivedStateOf {
             state.layoutInfo.visibleItemsInfo.size < state.layoutInfo.totalItemsCount ||
-                state.firstVisibleItemScrollOffset > 0
+                    state.firstVisibleItemScrollOffset > 0
         }
     }
 
@@ -895,7 +802,6 @@ fun ModVersionDependenciesContent(
     }
 }
 
-
 @Composable
 private fun DependencyHeader(text: String, color: Color) {
     Column {
@@ -924,7 +830,8 @@ private fun DependencyItemCard(
         color = if (isIncompatible) MaterialTheme.colorScheme.errorContainer
         else MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clipToBounds().pointerHoverIcon(PointerIcon.Hand)
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clipToBounds()
+            .pointerHoverIcon(PointerIcon.Hand)
     ) {
         Row(
             modifier = Modifier.padding(8.dp),

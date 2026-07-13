@@ -2,7 +2,6 @@ package com.combat.nomm
 
 import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.serialization.SavedStateConfiguration
-import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
@@ -11,7 +10,6 @@ import kotlinx.serialization.modules.subclass
 @Serializable
 sealed interface MainNavigation : NavKey {
     companion object {
-        @OptIn(InternalSerializationApi::class)
         val config = SavedStateConfiguration {
             serializersModule = SerializersModule {
                 polymorphic(NavKey::class) {
@@ -48,7 +46,6 @@ sealed interface MainNavigation : NavKey {
 @Serializable
 sealed interface ModNavigation : NavKey {
     companion object {
-        @OptIn(InternalSerializationApi::class)
         val config = SavedStateConfiguration {
             serializersModule = SerializersModule {
                 polymorphic(NavKey::class) {
@@ -68,4 +65,25 @@ sealed interface ModNavigation : NavKey {
 
     @Serializable
     data class Dependencies(val version: Version) : ModNavigation
+}
+
+
+@Serializable
+sealed interface ServerNavigation : NavKey {
+    companion object {
+        val config = SavedStateConfiguration {
+            serializersModule = SerializersModule {
+                polymorphic(NavKey::class) {
+                    subclass(Details::class)
+                    subclass(Modpack::class)
+                }
+            }
+        }
+    }
+
+    @Serializable
+    data object Details : ServerNavigation
+
+    @Serializable
+    data object Modpack : ServerNavigation
 }

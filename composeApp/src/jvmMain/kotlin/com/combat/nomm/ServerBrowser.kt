@@ -2,6 +2,7 @@ package com.combat.nomm
 
 import com.codedisaster.steamworks.SteamMatchmakingGameServerItem
 import com.codedisaster.steamworks.SteamNativeHandle
+import io.github.vinceglb.filekit.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 
@@ -75,23 +77,22 @@ object ServerFavorites {
         val gamePort: Int,
         val name: String? = null,
     )
-
-    private val file: java.io.File
-        get() = java.io.File(System.getProperty("user.home"), ".nomm/servers.json")
-
+    
     val servers: StateFlow<List<FavoriteServer>>
-        field = MutableStateFlow(load())
+        field = MutableStateFlow(runBlocking { load() })
 
-    private fun load(): List<FavoriteServer> = runCatching {
+    private suspend fun load(): List<FavoriteServer> = runCatching {
+        val file = (FileKit.filesDir / "servers.json")
         if (file.exists()) {
-            json.decodeFromString<List<FavoriteServer>>(file.readText())
+            json.decodeFromString<List<FavoriteServer>>(file.readString())
         } else emptyList()
     }.getOrElse { emptyList() }
 
-    private fun save() {
+    private suspend fun save() {
+        val file = (FileKit.filesDir / "servers.json")
         runCatching {
-            file.parentFile?.mkdirs()
-            file.writeText(json.encodeToString(servers.value))
+            file.parent()?.createDirectories()
+            file.writeString(json.encodeToString(servers.value))
         }
     }
 
@@ -99,12 +100,16 @@ object ServerFavorites {
         val normalized = ip.trim()
         if (servers.value.any { it.ip == normalized && it.gamePort == gamePort }) return
         servers.update { it + FavoriteServer(normalized, gamePort, name) }
-        save()
+        scope.launch {
+            save()
+        }
     }
 
     fun remove(ip: String, gamePort: Int) {
         servers.update { it.filterNot { s -> s.ip == ip && s.gamePort == gamePort } }
-        save()
+        scope.launch {
+            save()
+        }
     }
 
     fun isFavorited(ip: String, gamePort: Int): Boolean =
@@ -117,17 +122,17 @@ object ServerFavorites {
 }
 
 object ServerBrowser {
-    private val _servers = MutableStateFlow<List<ServerEntry>>(emptyList())
-    val servers: StateFlow<List<ServerEntry>> = _servers
+    val servers: StateFlow<List<ServerEntry>>
+        field = MutableStateFlow(emptyList())
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading
+    val isLoading: StateFlow<Boolean>
+        field = MutableStateFlow(false)
 
-    private val _isInstalling = MutableStateFlow(false)
-    val isInstalling: StateFlow<Boolean> = _isInstalling
+    val isInstalling: StateFlow<Boolean>
+        field = MutableStateFlow(false)
 
-    private val _installingModIds = MutableStateFlow<Set<String>>(emptySet())
-    val installingModIds: StateFlow<Set<String>> = _installingModIds
+    val installingModIds: StateFlow<Set<String>>
+        field = MutableStateFlow(emptySet())
 
     fun load() {
         discoverServers()
@@ -135,8 +140,8 @@ object ServerBrowser {
 
     fun discoverServers() {
         scope.launch {
-            if (_isLoading.value) return@launch
-            _isLoading.value = true
+            if (isLoading.value) return@launch
+            isLoading.value = true
             try {
                 val initStatus = SteamDiscovery.init()
                 if (initStatus != SteamDiscovery.InitStatus.OK) {
@@ -146,7 +151,7 @@ object ServerBrowser {
                 }
 
                 val favs = ServerFavorites.servers.value
-                _servers.value = favs.map { fav ->
+                servers.value = favs.map { fav ->
                     ServerEntry(
                         fav = fav,
                         info = null,
@@ -158,7 +163,7 @@ object ServerBrowser {
 
                 SteamDiscovery.requestServerList()
             } finally {
-                _isLoading.value = false
+                isLoading.value = false
             }
         }
     }
@@ -196,7 +201,7 @@ object ServerBrowser {
 
         val isFav = ServerFavorites.isFavorited(ip, gamePort)
 
-        _servers.update { current ->
+        servers.update { current ->
             val existingIndex = current.indexOfFirst {
                 it.fav.ip == ip && it.fav.gamePort == gamePort
             }
@@ -231,7 +236,7 @@ object ServerBrowser {
 
     private fun loadFavoritesOnly() {
         val favs = ServerFavorites.servers.value
-        _servers.value = favs.map { fav ->
+        servers.value = favs.map { fav ->
             ServerEntry(
                 fav = fav,
                 info = null,
@@ -242,7 +247,7 @@ object ServerBrowser {
     }
 
     fun refreshAll() {
-        _servers.value = emptyList()
+        servers.value = emptyList()
         SteamDiscovery.cancelQuery()
         discoverServers()
     }
@@ -257,7 +262,7 @@ object ServerBrowser {
         scope.launch {
             val url = entry.info?.modlistUrl ?: return@launch
 
-            _servers.update { current ->
+            servers.update { current ->
                 current.map { if (it.fav == entry.fav) it.copy(isRefreshing = true) else it }
             }
 
@@ -272,7 +277,7 @@ object ServerBrowser {
 
             val statuses = modlist?.let { calculateModStatuses(it) } ?: emptyList()
 
-            _servers.update { current ->
+            servers.update { current ->
                 current.map {
                     if (it.fav == entry.fav) {
                         it.copy(modlist = modlist, modStatuses = statuses, isRefreshing = false)
@@ -320,7 +325,7 @@ object ServerBrowser {
         val name = entry.fav.name
         ServerFavorites.toggleFavorite(ip, port, name)
 
-        _servers.update { current ->
+        servers.update { current ->
             current.map { e ->
                 if (e.fav.ip == ip && e.fav.gamePort == port) {
                     e.copy(isDiscovered = !ServerFavorites.isFavorited(ip, port))
@@ -330,8 +335,8 @@ object ServerBrowser {
     }
 
     fun installMissingMods(entry: ServerEntry) {
-        _installingModIds.value = entry.modsToInstall.map { it.modRef.id }.toSet()
-        _isInstalling.value = true
+        installingModIds.value = entry.modsToInstall.map { it.modRef.id }.toSet()
+        isInstalling.value = true
 
         entry.modsToInstall.forEach { status ->
             RepoMods.installMod(status.modRef.id, status.serverVersion)
@@ -339,14 +344,14 @@ object ServerBrowser {
     }
 
     fun finishInstall(entry: ServerEntry) {
-        _isInstalling.value = false
-        _installingModIds.value = emptySet()
+        isInstalling.value = false
+        installingModIds.value = emptySet()
 
         LocalMods.refresh()
 
         entry.modlist?.let { modlist ->
             val newStatuses = calculateModStatuses(modlist)
-            _servers.update { current ->
+            servers.update { current ->
                 current.map {
                     if (it.fav == entry.fav) it.copy(modStatuses = newStatuses)
                     else it
@@ -383,7 +388,7 @@ object ServerBrowser {
     }
 
     fun refreshModStatuses() {
-        _servers.update { current ->
+        servers.update { current ->
             current.map { entry ->
                 entry.modlist?.let { modlist ->
                     entry.copy(modStatuses = calculateModStatuses(modlist))
