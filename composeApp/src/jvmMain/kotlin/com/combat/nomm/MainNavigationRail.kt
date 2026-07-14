@@ -16,11 +16,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun MainNavigationRail(
@@ -141,40 +143,85 @@ fun MainNavigationRail(
     }
 }
 
+private val launching = AtomicBoolean(false)
+
 fun launchNuclearOption() {
+    if (!launching.compareAndSet(false, true)) {
+        println("[NOMM] Launch already in progress, skipping")
+        return
+    }
+
     scope.launch(Dispatchers.IO) {
-        val appId = "2168680"
-        val steamUri = "steam://rungameid/$appId"
-
-        val os = System.getProperty("os.name").lowercase()
-        var success = false
-
         try {
-            when {
-                os.contains("win") -> {
-                    ProcessBuilder("cmd.exe", "/c", "start", "", steamUri).start()
-                    success = true
-                }
-                os.contains("mac") -> {
-                    ProcessBuilder("open", steamUri).start()
-                    success = true
-                }
-                else -> {
-                    ProcessBuilder("xdg-open", steamUri).start()
-                    success = true
-                }
+            if (SteamDiscovery.isGameRunning()) {
+                println("[NOMM] Game is already running, skipping launch")
+                return@launch
             }
-        } catch (e: Exception) {
-            println("Steam protocol launch failed: ${e.message}")
-        }
-        
-        if (!success) {
-            val exeFile = File(SettingsManager.gameFolder, "NuclearOption.exe")
-            if (exeFile.exists()) {
+
+            println("[NOMM] Shutting down Steam worker before launch")
+            SteamDiscovery.shutdown()
+            delay(1000L)
+
+            val launched = try {
+                val os = System.getProperty("os.name").lowercase()
+                val steamUri = "steam://rungameid/2168680"
+                println("[NOMM] Launching game via Steam: $steamUri")
+                when {
+                    os.contains("win") -> {
+                        ProcessBuilder("cmd.exe", "/c", "start", "", steamUri).start()
+                    }
+                    os.contains("mac") -> {
+                        ProcessBuilder("open", steamUri).start()
+                    }
+                    else -> {
+                        var launched = false
+                        if (File(System.getProperty("user.home") + "/snap/steam").exists()) {
+                            println("[NOMM] Detected Snap Steam, launching via snap run")
+                            val exit = ProcessBuilder("bash", "-c", "snap run steam -- \"$steamUri\"").start().waitFor()
+                            if (exit == 0) launched = true
+                        }
+                        if (!launched && ProcessBuilder("which", "steam").start().waitFor() == 0) {
+                            println("[NOMM] Launching via steam command")
+                            ProcessBuilder("bash", "-c", "steam -- \"$steamUri\"").start()
+                            launched = true
+                        }
+                        if (!launched) {
+                            println("[NOMM] Launching via xdg-open")
+                            ProcessBuilder("xdg-open", steamUri).start()
+                        }
+                    }
+                }
+                true
+            } catch (e: Exception) {
+                println("[NOMM] Steam launch failed, falling back to exe: ${e.message}")
+                false
+            }
+
+            if (!launched) {
+                val exeFile = File(SettingsManager.gameFolder, "NuclearOption.exe")
+                if (!exeFile.exists()) {
+                    println("[NOMM] Game exe not found, cannot launch")
+                    return@launch
+                }
+                println("[NOMM] Launching NuclearOption.exe directly")
                 ProcessBuilder(exeFile.absolutePath)
                     .directory(exeFile.parentFile)
                     .start()
             }
+
+            println("[NOMM] Waiting for game to exit...")
+            while (!SteamDiscovery.isGameRunning()) {
+                delay(1000L)
+            }
+            while (SteamDiscovery.isGameRunning()) {
+                delay(5000L)
+            }
+            println("[NOMM] Game exited")
+
+            println("[NOMM] Restarting Steam worker")
+            SteamDiscovery.init()
+        } finally {
+            launching.set(false)
         }
     }
 }

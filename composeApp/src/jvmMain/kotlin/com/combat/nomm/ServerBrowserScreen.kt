@@ -9,9 +9,11 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import kotlinx.coroutines.delay
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.refresh_24px
 import org.jetbrains.compose.resources.painterResource
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun ServerBrowserScreen(
@@ -31,7 +33,18 @@ fun ServerBrowserScreen(
     }
 
     LaunchedEffect(Unit) {
-        ServerBrowser.load()
+        if (ServerBrowser.servers.value.isEmpty()) {
+            ServerBrowser.load()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60000.milliseconds)
+            if (!SteamDiscovery.isGameRunning() && ServerBrowser.servers.value.isNotEmpty()) {
+                ServerBrowser.refreshSteamServers()
+            }
+        }
     }
 
     val localMods by LocalMods.mods.collectAsState()

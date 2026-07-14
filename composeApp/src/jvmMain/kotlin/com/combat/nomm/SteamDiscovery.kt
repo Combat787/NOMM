@@ -1,45 +1,34 @@
 package com.combat.nomm
 
-import com.codedisaster.steamworks.*
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.File
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 object SteamDiscovery {
-    private const val APP_ID = 2168680
-
-    private var matchmaking: SteamMatchmakingServers? = null
-    private var currentRequest: SteamServerListRequest? = null
-    private var running = false
+    @Volatile private var workerProcess: Process? = null
+    @Volatile private var ipc: SteamWorkerIPC? = null
+    private var eventReaderJob: Job? = null
+    @Volatile private var running = false
+    private var initDeferred: CompletableDeferred<InitStatus>? = null
 
     val lock = Mutex(false)
-    var callbackJob: Job? = null
-    
-    
+
     val isRefreshing: StateFlow<Boolean>
         field = MutableStateFlow(false)
 
     val initResult: StateFlow<InitStatus>
         field = MutableStateFlow(InitStatus.NotInitialized)
 
-    enum class InitStatus {
-        NotInitialized,
-        OK,
-        NoSteamClient,
-        FailedGeneric,
-        VersionMismatch,
-    }
+    private val pendingPings = ConcurrentHashMap<String, (ServerInfo?) -> Unit>()
 
     suspend fun init(): InitStatus {
         lock.withLock {
@@ -47,162 +36,175 @@ object SteamDiscovery {
             if (running) return InitStatus.NotInitialized
 
             println("[NOMM] init() starting full initialization")
+            if (System.getProperty("os.name").lowercase().let { !it.contains("win") && !it.contains("mac") }) {
+                fixSteamSdkPath()
+            }
             extractSteamAppId()
 
-            val loaded = SteamAPI.loadLibraries(object : SteamLibraryLoader {
-                override fun loadLibrary(name: String): Boolean {
-                    val isWindows = System.getProperty("os.name").lowercase().contains("win")
-                    val isMac = System.getProperty("os.name").lowercase().contains("mac")
-                    val is64Bit = System.getProperty("os.arch").lowercase().let {
-                        it.contains("64") || it.contains("aarch64") || it.contains("arm64")
-                    }
-                    val isArm = System.getProperty("os.arch").lowercase().let {
-                        it.contains("aarch64") || it.contains("arm64")
-                    }
+            initDeferred = CompletableDeferred()
 
-                    val candidates = mutableListOf<String>()
-                    if (isWindows) {
-                        if (is64Bit) candidates.add("${name}64.dll")
-                        candidates.add("$name.dll")
-                    } else if (isMac) {
-                        if (isArm) candidates.add("lib${name}arm64.dylib")
-                        candidates.add("lib${name}.dylib")
-                    } else {
-                        if (is64Bit && !isArm) candidates.add("lib${name}64.so")
-                        if (isArm) candidates.add("lib${name}_arm64.so")
-                        candidates.add("lib${name}.so")
-                    }
+            val process = spawnWorker()
+            workerProcess = process
+            val workerIpc = SteamWorkerIPC(process.inputStream, process.outputStream)
+            ipc = workerIpc
 
-                    for (candidate in candidates) {
-                        val stream = javaClass.getResourceAsStream("/$candidate") ?: continue
-                        val tmpDir = File(System.getProperty("java.io.tmpdir"), "steamworks4j")
-                        tmpDir.mkdirs()
-                        val tmpFile = File(tmpDir, candidate)
-                        tmpFile.writeBytes(stream.readBytes())
-                        stream.close()
-                        try {
-                            System.load(tmpFile.absolutePath)
-                            println("[NOMM] Loaded native: $candidate")
-                            return true
-                        } catch (e: UnsatisfiedLinkError) {
-                            println("[NOMM] Failed to load $candidate: ${e.message}")
-                        }
-                    }
-
-                    try {
-                        System.loadLibrary(name)
-                        return true
-                    } catch (e: UnsatisfiedLinkError) {
-                        println("[NOMM] loadLibrary($name) failed: ${e.message}")
-                    }
-
-                    println("[NOMM] Could not load native: $name")
-                    return false
-                }
-            })
-
-            if (!loaded) {
-                println("[NOMM] Failed to load Steam native libraries")
-                initResult.value = InitStatus.FailedGeneric
-                return InitStatus.FailedGeneric
+            running = true
+            eventReaderJob = scope.launch {
+                readEvents(workerIpc)
             }
 
-            val result = when (SteamAPI.initEx()) {
-                SteamAPI.InitResult.OK -> {
-                    running = true
-                    startCallbackLoop()
-                    matchmaking = SteamMatchmakingServers()
-                    InitStatus.OK
-                }
+            workerIpc.sendCommand(WorkerCommand.Init)
 
-                SteamAPI.InitResult.NoSteamClient -> InitStatus.NoSteamClient
-                SteamAPI.InitResult.VersionMismatch -> InitStatus.VersionMismatch
-                SteamAPI.InitResult.FailedGeneric -> InitStatus.FailedGeneric
+            val status = initDeferred!!.await()
+            initDeferred = null
+            initResult.value = status
+
+            if (status != InitStatus.OK) {
+                running = false
+                shutdownWorker()
             }
 
-            initResult.value = result
-            println("[NOMM] Steam init: $result")
-            return result
+            println("[NOMM] Steam init: $status")
+            return status
         }
+    }
+
+    private suspend fun readEvents(workerIpc: SteamWorkerIPC) {
+        try {
+            while (running) {
+                val event = withContext(Dispatchers.IO) {
+                    workerIpc.readEvent()
+                } ?: break
+
+                when (event) {
+                    is WorkerEvent.InitComplete -> {
+                        initDeferred?.complete(event.status)
+                    }
+
+                    is WorkerEvent.ServerDiscovered -> {
+                        ServerBrowser.onSteamServerDiscovered(event.info)
+                    }
+
+                    is WorkerEvent.RefreshComplete -> {
+                        isRefreshing.value = false
+                    }
+
+                    is WorkerEvent.ServerPinged -> {
+                        pendingPings.remove(event.requestId)
+                            ?.invoke(event.info?.toServerInfo())
+                    }
+
+                    is WorkerEvent.Error -> {
+                        println("[NOMM] Worker error: ${event.message}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            println("[NOMM] Event reader error: ${e.message}")
+        } finally {
+            if (running) {
+                println("[NOMM] Worker process died, resetting state")
+                running = false
+                initResult.value = InitStatus.NotInitialized
+                isRefreshing.value = false
+                initDeferred?.complete(InitStatus.FailedGeneric)
+                initDeferred = null
+            }
+        }
+    }
+
+    private fun spawnWorker(): Process {
+        val javaHome = System.getProperty("java.home")
+        val javaBin = "$javaHome/bin/java"
+        val classPath = System.getProperty("java.class.path")
+            ?: error("Cannot determine classpath for steam-worker")
+
+        println("[NOMM] Spawning steam-worker")
+        return ProcessBuilder(
+            javaBin,
+            "--enable-native-access=ALL-UNNAMED",
+            "-cp", classPath,
+            "com.combat.nomm.steamworker.SteamWorkerMainKt"
+        ).apply {
+            redirectErrorStream(false)
+            redirectError(ProcessBuilder.Redirect.INHERIT)
+        }.start()
     }
 
     suspend fun shutdown() {
         lock.withLock {
             println("[NOMM] Steam shutdown")
-            if (initResult.value != InitStatus.OK) return
-
-            running = false
-            cancelQuery()
-
-            callbackJob?.cancelAndJoin()
-            callbackJob = null
-
-            SteamAPI.shutdown()
-            initResult.value = InitStatus.NotInitialized
-            matchmaking = null
+            shutdownWorker()
         }
     }
 
-    fun requestServerList(filters: List<SteamMatchmakingKeyValuePair> = emptyList()) {
-        val mm = matchmaking
-        if (mm == null) {
-            println("[NOMM] requestServerList: matchmaking is null, aborting")
-            return
+    private suspend fun shutdownWorker() {
+        running = false
+
+        try {
+            ipc?.sendCommand(WorkerCommand.Shutdown)
+        } catch (_: Exception) {
         }
 
-        cancelQuery()
-        isRefreshing.value = true
+        ipc?.close()
+        ipc = null
 
-        val filterArray = filters.toTypedArray()
-        val response = object : SteamMatchmakingServerListResponse() {
-            override fun serverResponded(request: SteamServerListRequest, server: Int) {
-                val details = SteamMatchmakingGameServerItem()
-                if (mm.getServerDetails(request, server, details)) {
-                    ServerBrowser.onSteamServerDiscovered(details)
-                }
-            }
+        eventReaderJob?.cancelAndJoin()
+        eventReaderJob = null
 
-            override fun serverFailedToRespond(request: SteamServerListRequest, server: Int) {
-                println("[NOMM] Server failed to respond: index=$server")
+        withContext(Dispatchers.IO) {
+            try {
+                workerProcess?.waitFor(5, TimeUnit.SECONDS)
+            } catch (_: Exception) {
             }
-
-            override fun refreshComplete(request: SteamServerListRequest, response: Response) {
-                println("[NOMM] Server list refresh complete: $response")
-                isRefreshing.value = false
-            }
+            workerProcess?.destroyForcibly()
         }
+        workerProcess = null
 
-        currentRequest = mm.requestInternetServerList(APP_ID, filterArray, response)
-    }
-
-    fun cancelQuery() {
-        currentRequest?.let { req ->
-            matchmaking?.cancelQuery(req)
-            matchmaking?.releaseRequest(req)
-        }
-        currentRequest = null
+        initResult.value = InitStatus.NotInitialized
         isRefreshing.value = false
     }
 
-    private fun startCallbackLoop() {
-            callbackJob = scope.launch {
-                while (isActive && running) {
-                    try {
-                        SteamAPI.runCallbacks()
-                        delay(66.milliseconds)
-                    } catch (e: CancellationException) {
-                        break
-                    } catch (e: Exception) {
-                        println("[NOMM] Callback loop error: ${e.message}")
-                        break
-                    }
-                }
+    fun isGameRunning(): Boolean {
+        return try {
+            val os = System.getProperty("os.name").lowercase()
+            if (os.contains("win")) {
+                val process = ProcessBuilder(
+                    "powershell", "-NoProfile", "-Command",
+                    "Get-Process -Name 'NuclearOption' -ErrorAction SilentlyContinue | Select-Object -First 1"
+                ).redirectErrorStream(true).start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                process.waitFor()
+                output.trim().isNotEmpty() && !output.contains("NoProcessFound")
+            } else {
+                val process = ProcessBuilder("pgrep", "-f", "NuclearOption")
+                    .redirectErrorStream(true).start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                process.waitFor()
+                output.trim().isNotEmpty()
             }
+        } catch (e: Exception) {
+            false
         }
+    }
 
-    fun parseModlistUrlFromName(serverName: String): String? {
-        val regex = Regex("""\[nomm:(.+?)]""")
-        return regex.find(serverName)?.groupValues?.getOrNull(1)
+    fun requestServerList() {
+        if (initResult.value != InitStatus.OK) return
+        isRefreshing.value = true
+        ipc?.sendCommand(WorkerCommand.RequestServerList)
+    }
+
+    fun cancelQuery() {
+        if (initResult.value != InitStatus.OK) return
+        ipc?.sendCommand(WorkerCommand.CancelQuery)
+        isRefreshing.value = false
+    }
+
+    fun pingServer(ip: String, queryPort: Int, onResult: (ServerInfo?) -> Unit) {
+        if (initResult.value != InitStatus.OK) return
+        val requestId = java.util.UUID.randomUUID().toString()
+        pendingPings[requestId] = onResult
+        ipc?.sendCommand(WorkerCommand.PingServer(ip, queryPort, requestId))
     }
 
     fun parseModsFromVersion(version: String?): List<PackageReference> {
@@ -242,28 +244,13 @@ object SteamDiscovery {
         return PackageReference(id = modId, version = Version(*versionParts.toIntArray()))
     }
 
-    private fun extractSteamAppId() {
-        runCatching {
-            val cwd = File(System.getProperty("user.dir"))
-            val target = File(cwd, "steam_appid.txt")
-            if (!target.exists()) {
-                val stream = javaClass.classLoader.getResourceAsStream("steam_appid.txt")
-                if (stream != null) {
-                    target.writeBytes(stream.readBytes())
-                    stream.close()
-                    println("[NOMM] Extracted steam_appid.txt to ${target.absolutePath}")
-                }
-            }
-        }
-    }
-
     data class ServerInfo(
         val name: String,
         val map: String,
         val players: Int,
         val maxPlayers: Int,
         val botPlayers: Int,
-        val ping: Duration,
+        val ping: kotlin.time.Duration,
         val hasPassword: Boolean,
         val isSecure: Boolean,
         val steamId: Long,
@@ -275,7 +262,7 @@ object SteamDiscovery {
         val gameDescription: String,
         val appId: Int,
         val serverVersion: Int,
-        val timeLastPlayed: Instant,
+        val timeLastPlayed: kotlin.time.Instant,
     )
 
     data class PlayerInfo(
@@ -288,107 +275,4 @@ object SteamDiscovery {
         val key: String,
         val ruleValue: String,
     )
-
-    private fun ipToInt(ip: String): Int {
-        val parts = ip.split(".")
-        return parts.fold(0) { acc, part -> (acc shl 8) or part.trim().toInt() }
-    }
-
-    fun pingServer(ip: String, queryPort: Int, onResult: (ServerInfo?) -> Unit) {
-        val mm = matchmaking ?: return
-        val response = object : SteamMatchmakingPingResponse() {
-            override fun serverResponded(server: SteamMatchmakingGameServerItem) {
-                val netAdr = server.netAdr
-                val connectionAddress = netAdr.connectionAddressString
-                val serverIp = connectionAddress.substringBeforeLast(":")
-                val gamePort = connectionAddress.substringAfterLast(":").toIntOrNull() ?: return
-                val parsedQueryPort = netAdr.queryPort.toInt() and 0xFFFF
-
-                onResult(
-                    ServerInfo(
-                        name = server.serverName,
-                        map = server.map,
-                        players = server.players,
-                        maxPlayers = server.maxPlayers,
-                        botPlayers = server.botPlayers,
-                        ping = server.ping.milliseconds,
-                        hasPassword = server.hasPassword(),
-                        isSecure = server.isSecure,
-                        steamId = SteamNativeHandle.getNativeHandle(server.steamID),
-                        gameDir = server.gameDir,
-                        gameTags = server.gameTags,
-                        gamePort = gamePort,
-                        queryPort = parsedQueryPort,
-                        modlistUrl = parseModlistUrlFromName(server.serverName),
-                        gameDescription = server.gameDescription,
-                        appId = server.appID,
-                        serverVersion = server.serverVersion,
-                        timeLastPlayed = Instant.fromEpochSeconds(server.timeLastPlayed.toLong()),
-                    )
-                )
-            }
-
-            override fun serverFailedToRespond() {
-                onResult(null)
-            }
-        }
-
-        mm.pingServer(ipToInt(ip), queryPort.toShort(), response)
-    }
-
-    fun fetchPlayerDetails(
-        ip: String,
-        queryPort: Int,
-        onResult: (List<PlayerInfo>) -> Unit,
-        onComplete: () -> Unit,
-    ) {
-        val mm = matchmaking ?: return
-        val players = mutableListOf<PlayerInfo>()
-
-        val response = object : SteamMatchmakingPlayersResponse() {
-            override fun addPlayerToList(name: String, score: Int, timePlayedSeconds: Float) {
-                players.add(PlayerInfo(name, score, timePlayedSeconds))
-            }
-
-            override fun playersFailedToRespond() {
-                onComplete()
-            }
-
-            override fun playersRefreshComplete() {
-                onResult(players.toList())
-                onComplete()
-            }
-        }
-
-        mm.playerDetails(ipToInt(ip), queryPort.toShort(), response)
-    }
-
-    fun fetchServerRules(
-        ip: String,
-        queryPort: Int,
-        onResult: (Map<String, String>) -> Unit,
-        onComplete: () -> Unit,
-    ) {
-        val mm = matchmaking ?: return
-        val rules = mutableMapOf<String, String>()
-
-        val response = object : SteamMatchmakingRulesResponse() {
-            override fun rulesResponded(key: String, value: String) {
-                rules[key] = value
-            }
-
-            override fun rulesFailedToRespond() {
-                onComplete()
-            }
-
-            override fun rulesRefreshComplete() {
-                onResult(rules.toMap())
-                onComplete()
-            }
-        }
-
-        mm.serverRules(ipToInt(ip), queryPort.toShort(), response)
-    }
 }
-
-

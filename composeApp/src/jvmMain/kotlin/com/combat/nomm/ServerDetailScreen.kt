@@ -60,10 +60,10 @@ fun ServerDetailScreen(
         ServerBrowser.refreshModStatuses()
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(ip, port) {
         while (true) {
-            delay(5000.milliseconds)
-            ServerBrowser.refreshSteamServers()
+            delay(15000.milliseconds)
+            ServerBrowser.refreshServer(ip, port)
         }
     }
     val backStack = rememberNavBackStack(ServerNavigation.config, ServerNavigation.Details)

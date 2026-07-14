@@ -59,8 +59,9 @@ fun main(args: Array<String>) = nucleusApplication(args, backend = NucleusBacken
         refresh()
     }
 
-
-    initializeSevenZipNative()
+    LaunchedEffect(Unit) {
+        initializeSevenZipNative()
+    }
     FileKit.init("NOMM")
     val configuration by SettingsManager.config
 

@@ -1,7 +1,5 @@
 package com.combat.nomm
 
-import com.codedisaster.steamworks.SteamMatchmakingGameServerItem
-import com.codedisaster.steamworks.SteamNativeHandle
 import io.github.vinceglb.filekit.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -13,8 +11,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 
 enum class ModStatus {
     MATCH,
@@ -146,7 +142,7 @@ object ServerBrowser {
             isLoading.value = true
             try {
                 val initStatus = SteamDiscovery.init()
-                if (initStatus != SteamDiscovery.InitStatus.OK) {
+                if (initStatus != InitStatus.OK) {
                     println("[NOMM] Steam init failed: $initStatus")
                     loadFavoritesOnly()
                     return@launch
@@ -170,36 +166,10 @@ object ServerBrowser {
         }
     }
 
-    fun onSteamServerDiscovered(details: SteamMatchmakingGameServerItem) {
-        val netAdr = details.netAdr
-        val connectionAddress = netAdr.connectionAddressString
-        val ip = connectionAddress.substringBeforeLast(":")
-        val gamePort = connectionAddress.substringAfterLast(":").toIntOrNull() ?: return
-        val queryPort = netAdr.queryPort.toInt() and 0xFFFF
-
-        val serverName = details.serverName
-        val modlistUrl = SteamDiscovery.parseModlistUrlFromName(serverName)
-
-        val info = SteamDiscovery.ServerInfo(
-            name = serverName,
-            map = details.map,
-            players = details.players,
-            maxPlayers = details.maxPlayers,
-            botPlayers = details.botPlayers,
-            ping = details.ping.milliseconds,
-            hasPassword = details.hasPassword(),
-            isSecure = details.isSecure,
-            steamId = SteamNativeHandle.getNativeHandle(details.steamID),
-            gameDir = details.gameDir,
-            gameTags = details.gameTags,
-            gamePort = gamePort,
-            queryPort = queryPort,
-            modlistUrl = modlistUrl,
-            gameDescription = details.gameDescription,
-            appId = details.appID,
-            serverVersion = details.serverVersion,
-            timeLastPlayed = Instant.fromEpochSeconds(details.timeLastPlayed.toLong()),
-        )
+    fun onSteamServerDiscovered(dto: ServerInfoDTO) {
+        val ip = dto.ip
+        val gamePort = dto.gamePort
+        val info = dto.toServerInfo()
 
         val isFav = ServerFavorites.isFavorited(ip, gamePort)
 
@@ -217,7 +187,7 @@ object ServerBrowser {
                 current.toMutableList().apply { this[existingIndex] = updated }
             } else {
                 current + ServerEntry(
-                    fav = ServerFavorites.FavoriteServer(ip, gamePort, serverName),
+                    fav = ServerFavorites.FavoriteServer(ip, gamePort, dto.name),
                     info = info,
                     modlist = null,
                     modStatuses = emptyList(),
@@ -255,7 +225,7 @@ object ServerBrowser {
     }
 
     fun refreshSteamServers() {
-        if (SteamDiscovery.initResult.value == SteamDiscovery.InitStatus.OK) {
+        if (SteamDiscovery.initResult.value == InitStatus.OK) {
             SteamDiscovery.requestServerList()
         }
     }
@@ -332,7 +302,10 @@ object ServerBrowser {
                 if (e.fav.ip == ip && e.fav.gamePort == port) {
                     e.copy(isDiscovered = !ServerFavorites.isFavorited(ip, port))
                 } else e
-            }
+            }.sortedWith(
+                compareByDescending<ServerEntry> { !it.isDiscovered }
+                    .thenByDescending { it.info?.players ?: 0 }
+            )
         }
     }
 
@@ -386,6 +359,25 @@ object ServerBrowser {
                 }
             }
             launchNuclearOption()
+        }
+    }
+
+    fun refreshServer(ip: String, gamePort: Int) {
+        if (SteamDiscovery.initResult.value != InitStatus.OK) return
+        if (SteamDiscovery.isGameRunning()) return
+
+        val entry = servers.value.find { it.fav.ip == ip && it.fav.gamePort == gamePort }
+        val queryPort = entry?.info?.queryPort ?: return
+
+        SteamDiscovery.pingServer(ip, queryPort) { result ->
+            if (result == null) return@pingServer
+            servers.update { current ->
+                current.map {
+                    if (it.fav.ip == ip && it.fav.gamePort == gamePort) {
+                        it.copy(info = result, isRefreshing = false)
+                    } else it
+                }
+            }
         }
     }
 
