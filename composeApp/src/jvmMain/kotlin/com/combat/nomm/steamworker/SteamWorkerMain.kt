@@ -27,6 +27,9 @@ fun main() {
                 is WorkerCommand.PingServer -> service.pingServer(
                     command.ip, command.queryPort, command.requestId
                 )
+                is WorkerCommand.QueryRules -> service.queryRules(
+                    command.ip, command.queryPort, command.requestId
+                )
                 is WorkerCommand.Shutdown -> {
                     service.shutdown()
                     break

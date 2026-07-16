@@ -391,6 +391,17 @@ object ServerBrowser {
         }
     }
 
+    fun setModlistFromRules(ip: String, gamePort: Int, modlist: List<PackageReference>) {
+        val statuses = calculateModStatuses(modlist)
+        servers.update { current ->
+            current.map {
+                if (it.fav.ip == ip && it.fav.gamePort == gamePort) {
+                    it.copy(modlist = modlist, modStatuses = statuses)
+                } else it
+            }
+        }
+    }
+
     fun connectToServer(entry: ServerEntry) {
         // Disabled - Nuclear Option does not support +connect yet.
         // Kept for future use if the feature is added.

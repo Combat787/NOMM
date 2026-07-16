@@ -71,6 +71,13 @@ sealed class WorkerCommand {
     ) : WorkerCommand()
 
     @Serializable
+    data class QueryRules(
+        val ip: String,
+        val queryPort: Int,
+        val requestId: String,
+    ) : WorkerCommand()
+
+    @Serializable
     data object Shutdown : WorkerCommand()
 }
 
@@ -89,6 +96,12 @@ sealed class WorkerEvent {
     data class ServerPinged(
         val requestId: String,
         val info: ServerInfoDTO?,
+    ) : WorkerEvent()
+
+    @Serializable
+    data class RulesQueried(
+        val requestId: String,
+        val rules: Map<String, String>?,
     ) : WorkerEvent()
 
     @Serializable

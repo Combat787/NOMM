@@ -29,6 +29,7 @@ object SteamDiscovery {
         field = MutableStateFlow(InitStatus.NotInitialized)
 
     private val pendingPings = ConcurrentHashMap<String, (ServerInfo?) -> Unit>()
+    private val pendingRulesCallbacks = ConcurrentHashMap<String, (Map<String, String>?) -> Unit>()
 
     suspend fun init(): InitStatus {
         lock.withLock {
@@ -92,6 +93,11 @@ object SteamDiscovery {
                     is WorkerEvent.ServerPinged -> {
                         pendingPings.remove(event.requestId)
                             ?.invoke(event.info?.toServerInfo())
+                    }
+
+                    is WorkerEvent.RulesQueried -> {
+                        pendingRulesCallbacks.remove(event.requestId)
+                            ?.invoke(event.rules)
                     }
 
                     is WorkerEvent.Error -> {
@@ -205,6 +211,13 @@ object SteamDiscovery {
         val requestId = java.util.UUID.randomUUID().toString()
         pendingPings[requestId] = onResult
         ipc?.sendCommand(WorkerCommand.PingServer(ip, queryPort, requestId))
+    }
+
+    fun queryRules(ip: String, queryPort: Int, onResult: (Map<String, String>?) -> Unit) {
+        if (initResult.value != InitStatus.OK) return
+        val requestId = java.util.UUID.randomUUID().toString()
+        pendingRulesCallbacks[requestId] = onResult
+        ipc?.sendCommand(WorkerCommand.QueryRules(ip, queryPort, requestId))
     }
 
     fun parseModsFromVersion(version: String?): List<PackageReference> {

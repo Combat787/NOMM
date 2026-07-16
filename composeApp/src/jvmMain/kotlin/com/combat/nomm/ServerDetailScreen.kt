@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
@@ -60,6 +61,28 @@ fun ServerDetailScreen(
         ServerBrowser.refreshModStatuses()
     }
 
+    var nommData by remember { mutableStateOf<NommServerData?>(null) }
+    LaunchedEffect(entry.fav.ip, entry.info?.queryPort) {
+        val qp = entry.info?.queryPort ?: return@LaunchedEffect
+        val maxAttempts = 3
+        for (attempt in 1..maxAttempts) {
+            val received = suspendCancellableCoroutine<Map<String, String>?> { cont ->
+                SteamDiscovery.queryRules(entry.fav.ip, qp) { rules ->
+                    if (cont.isActive) cont.resumeWith(Result.success(rules))
+                }
+            }
+            if (received != null) {
+                val data = parseNommRules(received)
+                nommData = data
+                data?.let {
+                    ServerBrowser.setModlistFromRules(entry.fav.ip, entry.fav.gamePort, it.mods)
+                }
+                break
+            }
+            if (attempt < maxAttempts) delay(3000.milliseconds)
+        }
+    }
+
     LaunchedEffect(ip, port) {
         while (true) {
             delay(15000.milliseconds)
@@ -87,7 +110,7 @@ fun ServerDetailScreen(
         title = entry.displayName,
         subtitle = "${entry.fav.ip}:${entry.fav.gamePort}",
         details = {
-            ServerDetails(entry)
+            ServerDetails(entry, nommData)
         },
         buttons = { controlSize, iconSize ->
             ServerActions(entry, isInstalling, controlSize, iconSize)
@@ -96,7 +119,7 @@ fun ServerDetailScreen(
         content = {
             entryProvider {
                 entry<ServerNavigation.Details> {
-                    ServerDetailsContent(entry)
+                    ServerDetailsContent(entry, nommData)
                 }
                 entry<ServerNavigation.Modpack> {
                     ServerModlistContent(entry, isInstalling, installStatuses, onOpenMod)
@@ -111,6 +134,7 @@ fun ServerDetailScreen(
 @Composable
 fun ServerDetails(
     entry: ServerEntry,
+    nommData: NommServerData? = null,
 ) {
     Row(
         modifier = Modifier.height(IntrinsicSize.Min),
@@ -131,8 +155,11 @@ fun ServerDetails(
             }
             if (entry.info.map.isNotEmpty()) {
                 VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+                val mapDisplay = nommData?.let { nd ->
+                    listOfNotNull(nd.map, nd.mission).joinToString(" | ").ifEmpty { null }
+                } ?: entry.info.map
                 Text(
-                    entry.info.map,
+                    mapDisplay,
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                 )
@@ -271,8 +298,62 @@ fun ServerActions(
     }
 }
 
+data class NommServerData(
+    val version: String,
+    val mods: List<PackageReference>,
+    val hash: String,
+    val required: List<String>,
+    val map: String?,
+    val mission: String?,
+)
+
+private fun parseNommRules(rules: Map<String, String>): NommServerData? {
+    val chunkCount = rules["nomm_c"]?.toIntOrNull() ?: return null
+    val version = rules["nomm_v"] ?: return null
+
+    val dataBuilder = StringBuilder()
+    for (i in 0 until chunkCount) {
+        dataBuilder.append(rules["nomm_d$i"] ?: return null)
+    }
+
+    val hashBuilder = StringBuilder()
+    var i = 0
+    while (true) {
+        val chunk = rules["nomm_h$i"] ?: break
+        hashBuilder.append(chunk)
+        i++
+    }
+
+    val requiredBuilder = StringBuilder()
+    i = 0
+    while (true) {
+        val chunk = rules["nomm_r$i"] ?: break
+        requiredBuilder.append(chunk)
+        i++
+    }
+
+    val mods = try {
+        json.decodeFromString<List<PackageReference>>(dataBuilder.toString())
+    } catch (_: Exception) {
+        return null
+    }
+
+    val required = if (requiredBuilder.isNotEmpty()) {
+        requiredBuilder.toString().split(";").filter { it.isNotEmpty() }
+    } else emptyList()
+
+    return NommServerData(
+        version = version,
+        mods = mods,
+        hash = hashBuilder.toString(),
+        required = required,
+        map = rules["ma"],
+        mission = rules["mi"],
+    )
+}
+
 @Composable
-private fun ServerDetailsContent(entry: ServerEntry) {
+private fun ServerDetailsContent(entry: ServerEntry, nommData: NommServerData?) {
     SelectionContainer {
         val state = rememberScrollState()
 
@@ -293,13 +374,26 @@ private fun ServerDetailsContent(entry: ServerEntry) {
                     DetailRow("Address", "${entry.fav.ip}:${entry.fav.gamePort}")
                     DetailRow("Players", "${entry.info.players} / ${entry.info.maxPlayers}")
                     if (entry.info.botPlayers > 0) DetailRow("Bots", entry.info.botPlayers.toString())
-                    if (entry.info.map.isNotEmpty()) DetailRow("Map", entry.info.map)
+                    if (entry.info.map.isNotEmpty()) {
+                        val mapDisplay = nommData?.let { nd ->
+                            listOfNotNull(nd.map, nd.mission).joinToString(" | ").ifEmpty { null }
+                        } ?: entry.info.map
+                        DetailRow("Map", mapDisplay)
+                    }
                     if (entry.info.ping.isPositive()) DetailRow("Ping", entry.info.ping.toString())
                     if (entry.info.hasPassword) DetailRow("Password", "Yes")
                     if (entry.info.isSecure) DetailRow("VAC", "Enabled")
                     if (entry.info.steamId > 0) DetailRow("Steam ID", entry.info.steamId.toString())
                     if (entry.info.gameDir.isNotEmpty()) DetailRow("Game Dir", entry.info.gameDir)
                     if (entry.info.gameTags.isNotEmpty()) DetailRow("Tags", entry.info.gameTags)
+                    if (nommData != null) {
+                        DetailRow("NOMM", "${nommData.mods.size} mod(s) - hash ${nommData.hash.take(16)}...")
+                        if (nommData.required.isNotEmpty()) {
+                            DetailRow("Required", nommData.required.joinToString(", "))
+                        }
+                    } else if (entry.info.queryPort > 0) {
+                        DetailRow("NOMM", "No data (server has no NOSMR)")
+                    }
                 } else if (entry.isRefreshing) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),

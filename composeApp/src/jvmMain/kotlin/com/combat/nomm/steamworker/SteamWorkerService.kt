@@ -104,6 +104,26 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
         mm.pingServer(ipToInt(ip), queryPort.toShort(), response)
     }
 
+    fun queryRules(ip: String, queryPort: Int, requestId: String) {
+        val mm = matchmaking ?: return
+        val rules = mutableMapOf<String, String>()
+        val response = object : SteamMatchmakingRulesResponse() {
+            override fun rulesResponded(rule: String, value: String) {
+                rules[rule] = value
+            }
+
+            override fun rulesFailedToRespond() {
+                ipc.sendEvent(WorkerEvent.RulesQueried(requestId, null))
+            }
+
+            override fun rulesRefreshComplete() {
+                ipc.sendEvent(WorkerEvent.RulesQueried(requestId, rules.toMap()))
+            }
+        }
+
+        mm.serverRules(ipToInt(ip), queryPort.toShort(), response)
+    }
+
     fun shutdown() {
         running = false
         cancelQuery()
