@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import java.io.File
 
 enum class ModStatus {
     MATCH,
@@ -131,6 +132,8 @@ object ServerBrowser {
 
     val installingModIds: StateFlow<Set<String>>
         field = MutableStateFlow(emptySet())
+
+    var modHashLookup: Map<String, PackageReference> = emptyMap()
 
     fun load() {
         discoverServers()
@@ -340,6 +343,7 @@ object ServerBrowser {
             entry.modlist?.let { modlist ->
                 val modlistIds = modlist.map { it.id }.toSet()
                 LocalMods.mods.value.forEach { (id, meta) ->
+                    if (id in LocalMods.protectedIds) return@forEach
                     if (modlistIds.contains(id) && meta.enabled != true) {
                         meta.enable()
                     } else if (!modlistIds.contains(id) && meta.enabled == true) {
@@ -353,7 +357,8 @@ object ServerBrowser {
 
     fun launchVanilla() {
         scope.launch(Dispatchers.IO) {
-            LocalMods.mods.value.forEach { (_, meta) ->
+            LocalMods.mods.value.forEach { (id, meta) ->
+                if (id in LocalMods.protectedIds) return@forEach
                 if (meta.enabled == true) {
                     meta.disable()
                 }
@@ -403,7 +408,36 @@ object ServerBrowser {
     }
 
     fun connectToServer(entry: ServerEntry) {
-        // Disabled - Nuclear Option does not support +connect yet.
-        // Kept for future use if the feature is added.
+        scope.launch(Dispatchers.IO) {
+            // 1. Enable the server's required mods
+            entry.modlist?.let { modlist ->
+                val modlistIds = modlist.map { it.id }.toSet()
+                LocalMods.mods.value.forEach { (id, meta) ->
+                    if (id in LocalMods.protectedIds) return@forEach
+                    if (modlistIds.contains(id) && meta.enabled != true) {
+                        meta.enable()
+                    } else if (!modlistIds.contains(id) && meta.enabled == true) {
+                        meta.disable()
+                    }
+                }
+            }
+
+            // 2. Write connect request for NOMM-Integration plugin
+            val configDir = SettingsManager.gameFolder?.let { File(it, "BepInEx/config") }
+            if (configDir == null) {
+                println("[NOMM] Cannot write connect request: game folder not set")
+                return@launch
+            }
+            configDir.mkdirs()
+
+            val host = entry.fav.ip
+            val port = entry.fav.gamePort
+            val json = """{"host":"$host","port":$port,"password":null}"""
+            File(configDir, "nomm-connect.json").writeText(json)
+            println("[NOMM] Wrote connect request: $host:$port")
+
+            // 3. Launch game
+            launchNuclearOption()
+        }
     }
 }

@@ -31,6 +31,8 @@ object LocalMods {
     val mods: StateFlow<Map<String, ModMeta>>
         field = MutableStateFlow(emptyMap())
 
+    val protectedIds = setOf("NOMM-Integration", "NOSMR")
+
 
 
     fun exportMods() {
@@ -420,6 +422,7 @@ data class ModMeta(
         val currentSelf = LocalMods.mods.value[id] ?: this
         val currentFile = currentSelf.file ?: return
         if (currentSelf.enabled == false || !currentFile.exists()) return
+        if (id in LocalMods.protectedIds) return
 
         LocalMods.mods.value.values.forEach { other ->
             if (other.artifact?.extends?.id == id && other.enabled == true) {

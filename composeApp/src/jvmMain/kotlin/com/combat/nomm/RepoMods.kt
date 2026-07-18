@@ -31,6 +31,7 @@ object RepoMods {
                     NetworkClient.fetchManifest() ?: SettingsManager.cachedManifest.value.manifest
                 }
                 mods.value = fetched.distinctBy { it.id }
+                ServerBrowser.modHashLookup = buildModHashLookup(mods.value)
             } finally {
                 isLoading.value = false
                 mutex.unlock()

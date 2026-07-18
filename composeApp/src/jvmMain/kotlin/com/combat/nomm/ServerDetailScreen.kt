@@ -274,6 +274,35 @@ fun ServerActions(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) {
                     Text(
+                        "Join Server",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            },
+        ) {
+            IconButton(
+                onClick = { ServerBrowser.connectToServer(entry) },
+                modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds()
+                    .pointerHoverIcon(PointerIcon.Hand),
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.computer_24px),
+                    contentDescription = "Join Server",
+                    modifier = Modifier.size(iconSize),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+            state = rememberTooltipState(),
+            tooltip = {
+                PlainTooltip(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Text(
                         if (entry.isFavorite) "Remove from Favorites" else "Add to Favorites",
                         style = MaterialTheme.typography.labelMedium,
                     )
@@ -308,13 +337,9 @@ data class NommServerData(
 )
 
 private fun parseNommRules(rules: Map<String, String>): NommServerData? {
-    val chunkCount = rules["nomm_c"]?.toIntOrNull() ?: return null
+    val modCount = rules["nomm_c"]?.toIntOrNull() ?: return null
     val version = rules["nomm_v"] ?: return null
-
-    val dataBuilder = StringBuilder()
-    for (i in 0 until chunkCount) {
-        dataBuilder.append(rules["nomm_d$i"] ?: return null)
-    }
+    // println("[NOMM] parseNommRules: v=$version modCount=$modCount")
 
     val hashBuilder = StringBuilder()
     var i = 0
@@ -332,12 +357,37 @@ private fun parseNommRules(rules: Map<String, String>): NommServerData? {
         i++
     }
 
-    val mods = try {
-        json.decodeFromString<List<PackageReference>>(dataBuilder.toString())
-    } catch (_: Exception) {
-        return null
+    val mods = if (version == "2") {
+        val lookup = ServerBrowser.modHashLookup
+        // println("[NOMM] v2 hash lookup: ${lookup.size} entries")
+        (0 until modCount).mapNotNull { idx ->
+            val raw = rules["nomm_d$idx"] ?: return@mapNotNull null
+            if (raw.endsWith("UNK")) {
+                // println("[NOMM]   mod[$idx] UNK: $raw")
+                PackageReference(id = raw.removeSuffix("UNK"), version = null)
+            } else {
+                val resolved = lookup[raw]
+                if (resolved != null) {
+                    // println("[NOMM]   mod[$idx] $raw -> ${resolved.id}@${resolved.version}")
+                } else {
+                    // println("[NOMM]   mod[$idx] $raw -> UNRESOLVED")
+                }
+                resolved ?: return@mapNotNull null
+            }
+        }
+    } else {
+        val dataBuilder = StringBuilder()
+        for (i in 0 until modCount) {
+            dataBuilder.append(rules["nomm_d$i"] ?: return null)
+        }
+        try {
+            json.decodeFromString<List<PackageReference>>(dataBuilder.toString())
+        } catch (_: Exception) {
+            return null
+        }
     }
 
+    // println("[NOMM] Resolved ${mods.size} mod(s): ${mods.joinToString { it.id }}")
     val required = if (requiredBuilder.isNotEmpty()) {
         requiredBuilder.toString().split(";").filter { it.isNotEmpty() }
     } else emptyList()
@@ -501,7 +551,7 @@ private fun ServerModlistContent(
                     val mod = RepoMods.mods.collectAsState().value.find { it.id == status.modRef.id }
                     DetailListItemCard(
                         title = mod?.displayName ?: status.modRef.id,
-                        description = status.serverVersion?.toString() ?: "",
+                        description = status.serverVersion?.toString() ?: "Local mod",
                         onClick = if (mod != null) {
                             { onOpenMod.invoke(mod.id) }
                         } else null,
