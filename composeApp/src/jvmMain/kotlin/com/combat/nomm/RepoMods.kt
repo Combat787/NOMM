@@ -81,12 +81,6 @@ object RepoMods {
     }
 
     fun installMod(id: String, version: Version?, processing: MutableSet<String> = mutableSetOf()) {
-        val bepinexFolder = SettingsManager.bepInExFolder
-        if (bepinexFolder == null || !bepinexFolder.exists()) {
-            downloadBepInEx()
-            return
-        }
-
         if (id in processing) return
         processing.add(id)
 
@@ -104,6 +98,32 @@ object RepoMods {
         targetArtifact.dependencies.forEach { installMod(it.id, null, processing) }
         targetArtifact.extends?.let { installMod(it.id, null, processing) }
 
+        installMod(extension.id, targetArtifact.downloadUrl, targetArtifact.hash) { dir ->
+            val metaData = ModMeta(
+                id = id,
+                artifact = targetArtifact,
+            )
+
+            runCatching {
+                File(dir, "meta.json").writeText(json.encodeToString(metaData))
+                LocalMods.refresh()
+                LocalMods.mods.value[id]?.enable()
+            }
+        }
+    }
+    
+
+    fun installMod(id: String, url: String, hash: String? = null, onSuccess: (dir: File) -> Unit = {
+        
+    }) {
+        val bepinexFolder = SettingsManager.bepInExFolder
+        if (bepinexFolder == null || !bepinexFolder.exists()) {
+            downloadBepInEx()
+            return
+        }
+
+
+        val installedMod = LocalMods.mods.value[id]
         installedMod?.disable()
 
         val disabledFolder = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
@@ -112,17 +132,8 @@ object RepoMods {
         if (dir.exists()) dir.deleteRecursively()
         if (!dir.mkdirs()) return
 
-        Installer.installMod(extension.id, targetArtifact.downloadUrl, dir, targetArtifact.hash) {
-            val metaData = ModMeta(
-                id = extension.id,
-                artifact = targetArtifact,
-            )
-
-            runCatching {
-                File(dir, "meta.json").writeText(json.encodeToString(metaData))
-                LocalMods.refresh()
-                LocalMods.mods.value[extension.id]?.enable()
-            }
+        Installer.installMod(id, url, dir, hash) {
+            onSuccess(dir)
         }
     }
 }

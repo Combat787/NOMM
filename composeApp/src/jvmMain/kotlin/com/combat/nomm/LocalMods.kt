@@ -34,7 +34,6 @@ object LocalMods {
     val protectedIds = setOf("NOMM-Integration", "NOSMR")
 
 
-
     fun exportMods() {
         scope.launch {
             val byteStream = ByteArrayOutputStream()
@@ -126,7 +125,7 @@ object LocalMods {
             importMods(file)
         }
     }
-    
+
     fun importMods(file: PlatformFile?) {
         scope.launch {
             file?.let { platformFile ->
@@ -165,7 +164,7 @@ object LocalMods {
 
                                         val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
                                         val destinationFile = File(pluginsDir, fileName)
-                                        
+
                                         if (entry.isDirectory) {
                                             destinationFile.mkdirs()
                                         } else {
@@ -316,16 +315,53 @@ object LocalMods {
     fun refresh() {
         loadInstalledModMetas()
         RepoMods.fetchManifest()
+
+        val ver = Version(1, 0, 0)
+        val id = "NOSMR"
+        val downloadUrl = "https://github.com/RaylaValdez/NOSMR/releases/download/v1.0.0/NOSMR.dll"
+        val hash = "sha256:f98b01196399740c244d41c5d48e5c802c7e50eda79653b37de597fbdf7472f4"
+
+
+        val installedMod = mods.value[id]
+        if (installedMod != null) {
+            val currentVersion = installedMod.artifact?.version
+            if (currentVersion == ver) return
+        }
+
+
+        RepoMods.installMod(
+            id,
+            downloadUrl,
+            hash
+        ) { dir ->
+            val metaData = ModMeta(
+                id = id,
+                artifact = Artifact(
+                    version = ver,
+                    downloadUrl = downloadUrl
+                ),
+            )
+
+            runCatching {
+                File(dir, "meta.json").writeText(json.encodeToString(metaData))
+                LocalMods.refresh()
+                if (SettingsManager.config.value.nosmr) {
+                    LocalMods.mods.value[id]?.enable()
+                } else {
+                    LocalMods.mods.value[id]?.disable()
+                }
+            }
+        }
     }
 
     fun enableAll() {
-        mods.value.forEach { (_, meta) -> 
+        mods.value.forEach { (_, meta) ->
             meta.enable()
         }
     }
 
     fun disableAll() {
-        mods.value.forEach { (_, meta) -> 
+        mods.value.forEach { (_, meta) ->
             meta.disable()
         }
     }

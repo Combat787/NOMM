@@ -5,7 +5,7 @@ kotlin = "2.4.0"
 kotlinx-coroutines = "1.11.0"
 ktor = "3.5.0"
 material3 = "1.11.0-alpha07"
-nucleus = "2.0.0"
+nucleus = "2.0.7"
 
 kotlinx-serialization = "1.11.0"
 kotlinx-datetime = "0.8.0"

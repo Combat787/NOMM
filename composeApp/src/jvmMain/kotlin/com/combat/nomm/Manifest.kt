@@ -59,8 +59,8 @@ fun computeModHashPrefix(id: String, version: Version): String {
 
 fun buildModHashLookup(manifest: Manifest): Map<String, PackageReference> {
     val lookup = HashMap<String, PackageReference>()
-    for (ext in manifest) {
-        for (artifact in ext.artifacts) {
+    manifest.forEach { ext ->
+        ext.artifacts.forEach { artifact ->
             val hashPrefix = computeModHashPrefix(ext.id, artifact.version)
             lookup[hashPrefix] = PackageReference(ext.id, artifact.version)
         }

@@ -29,7 +29,7 @@ fun SearchScreen(
     val allMods by RepoMods.mods.collectAsState()
     val isLoading by RepoMods.isLoading.collectAsState()
 
-    val filteredMods = rememberFilteredExtensions(allMods, searchQuery)
+    val filteredMods = rememberFilteredExtensions(allMods.filter { it.id != "NOSMR" }, searchQuery)
 
 
 

@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Instant
 
 object SteamDiscovery {
     @Volatile private var workerProcess: Process? = null
@@ -263,7 +265,7 @@ object SteamDiscovery {
         val players: Int,
         val maxPlayers: Int,
         val botPlayers: Int,
-        val ping: kotlin.time.Duration,
+        val ping: Duration,
         val hasPassword: Boolean,
         val isSecure: Boolean,
         val steamId: Long,
@@ -275,7 +277,7 @@ object SteamDiscovery {
         val gameDescription: String,
         val appId: Int,
         val serverVersion: Int,
-        val timeLastPlayed: kotlin.time.Instant,
+        val timeLastPlayed: Instant,
     )
 
     data class PlayerInfo(

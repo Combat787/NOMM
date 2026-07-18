@@ -22,7 +22,6 @@ val version = json.decodeFromString<Version>(BuildKonfig.VERSION)
 
 val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun App() {
     val backStack = rememberNavBackStack(MainNavigation.config, MainNavigation.Search)

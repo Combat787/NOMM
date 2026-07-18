@@ -38,7 +38,7 @@ fun LibraryScreen(
         }
     }
 
-    val filteredMods = rememberFilteredExtensions(installedExtensions, searchQuery)
+    val filteredMods = rememberFilteredExtensions(installedExtensions.filter { it.id != "NOSMR" }, searchQuery)
 
 
 

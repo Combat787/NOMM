@@ -187,6 +187,21 @@ fun SettingsScreen() {
                         SettingsManager.updateConfig(currentConfig.copy(contrast = it))
                     })
             }
+            SettingsGroup("Game Integration") {
+                SettingsSwitchRow(
+                    label = "NOSMR",
+                    subLabel = "The Nuclear Option Server Mod Reporter allows your Nuclear Option Game to share its Modpack with the NOMM Server List allowing other NOMM users to join easily with the correct Mods.",
+                    checked = currentConfig.nosmr,
+                    onCheckedChange = { newValue ->
+                        SettingsManager.updateConfig(currentConfig.copy(nosmr = newValue))
+                        if (SettingsManager.config.value.nosmr) {
+                            LocalMods.mods.value["NOSMR"]?.enable()
+                        } else {
+                            LocalMods.mods.value["NOSMR"]?.disable()
+                        }
+                    }
+                )
+            }
             SettingsGroup(title = "Folders") {
                 ClickableSettingsRow(
                     label = "Open Nuclear Option Folder",
@@ -211,6 +226,7 @@ fun SettingsScreen() {
                     subLabel = "Click to open the Folder containing the NOMM Data.",
                     onClick = {
                         scope.launch {
+                            
                             Desktop.getDesktop().open(FileKit.filesDir.file)
                         }
                     })
