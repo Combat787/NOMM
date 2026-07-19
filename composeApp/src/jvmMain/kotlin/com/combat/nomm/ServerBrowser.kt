@@ -9,9 +9,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 enum class ModStatus {
     MATCH,
@@ -34,11 +41,16 @@ data class ServerEntry(
     val info: SteamDiscovery.ServerInfo?,
     val modlist: List<PackageReference>?,
     val modStatuses: List<ServerModStatus>,
+    val missionData: MissionData? = null,
     val isRefreshing: Boolean = false,
     val isDiscovered: Boolean = false,
+    val isLobby: Boolean = false,
 ) {
     val displayName: String
-        get() = fav.name ?: info?.name ?: "${fav.ip}:${fav.gamePort}"
+        get() {
+            val base = fav.name ?: info?.name ?: "${fav.ip}:${fav.gamePort}"
+            return if (isLobby) "[Lobby] $base" else base
+        }
 
     val isFavorite: Boolean
         get() = ServerFavorites.isFavorited(fav.ip, fav.gamePort)
@@ -48,10 +60,11 @@ data class ServerEntry(
             if (modlist == null) return ModStatusSummary.UNKNOWN
             val statuses = modStatuses.map { it.status }
             return when {
+                statuses.isEmpty() -> ModStatusSummary.UNKNOWN
                 statuses.all { it == ModStatus.MATCH } -> ModStatusSummary.READY
                 statuses.any { it == ModStatus.NEED_INSTALL } || statuses.any { it == ModStatus.VERSION_MISMATCH } -> ModStatusSummary.CAN_FIX
                 statuses.any { it == ModStatus.NOT_IN_REPO } -> ModStatusSummary.PARTIAL
-                else -> ModStatusSummary.READY
+                else -> ModStatusSummary.UNKNOWN
             }
         }
 
@@ -73,7 +86,7 @@ object ServerFavorites {
     @Serializable
     data class FavoriteServer(
         val ip: String,
-        val gamePort: Int,
+        val gamePort: Long,
         val name: String? = null,
     )
     
@@ -95,7 +108,7 @@ object ServerFavorites {
         }
     }
 
-    fun add(ip: String, gamePort: Int, name: String? = null) {
+    fun add(ip: String, gamePort: Long, name: String? = null) {
         val normalized = ip.trim()
         if (servers.value.any { it.ip == normalized && it.gamePort == gamePort }) return
         servers.update { it + FavoriteServer(normalized, gamePort, name) }
@@ -104,23 +117,74 @@ object ServerFavorites {
         }
     }
 
-    fun remove(ip: String, gamePort: Int) {
+    fun remove(ip: String, gamePort: Long) {
         servers.update { it.filterNot { s -> s.ip == ip && s.gamePort == gamePort } }
         scope.launch {
             save()
         }
     }
 
-    fun isFavorited(ip: String, gamePort: Int): Boolean =
+    fun isFavorited(ip: String, gamePort: Long): Boolean =
         servers.value.any { it.ip == ip && it.gamePort == gamePort }
 
-    fun toggleFavorite(ip: String, gamePort: Int, name: String?) {
+    fun toggleFavorite(ip: String, gamePort: Long, name: String?) {
         if (isFavorited(ip, gamePort)) remove(ip, gamePort)
         else add(ip, gamePort, name)
     }
 }
 
+private fun parseGameTags(gameTags: String): Map<String, String> {
+    if (gameTags.isBlank()) return emptyMap()
+    return gameTags.split(",").mapNotNull { pair ->
+        val parts = pair.split("=", limit = 2)
+        if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
+    }.toMap()
+}
+
+fun mergeMissionData(base: MissionData?, incoming: MissionData?): MissionData? {
+    if (base == null && incoming == null) return null
+    if (base == null) return incoming
+    if (incoming == null) return base
+    return MissionData(
+        missionName = incoming.missionName ?: base.missionName,
+        mapName = incoming.mapName ?: base.mapName,
+        description = incoming.description ?: base.description,
+        pvpType = incoming.pvpType ?: base.pvpType,
+        workshopId = incoming.workshopId ?: base.workshopId,
+        startTime = incoming.startTime ?: base.startTime,
+        gameVersion = incoming.gameVersion ?: base.gameVersion,
+        moddedServer = incoming.moddedServer ?: base.moddedServer,
+    )
+}
+
 object ServerBrowser {
+    private const val LOBBY_TAG = "Lobby"
+    internal const val LOBBY_IP = "lobby"
+
+    private val serverSortComparator = compareByDescending<ServerEntry> { !it.isDiscovered }
+        .thenByDescending { it.info?.players ?: 0 }
+
+    private fun syncModsToModlist(modlist: List<PackageReference>) {
+        val modlistIds = modlist.map { it.id }.toSet()
+        LocalMods.mods.value.forEach { (id, meta) ->
+            if (id in LocalMods.protectedIds) return@forEach
+            if (modlistIds.contains(id) && meta.enabled != true) {
+                meta.enable()
+            } else if (!modlistIds.contains(id) && meta.enabled == true) {
+                meta.disable()
+            }
+        }
+    }
+
+    private fun disableAllMods() {
+        LocalMods.mods.value.forEach { (id, meta) ->
+            if (id in LocalMods.protectedIds) return@forEach
+            if (meta.enabled == true) {
+                meta.disable()
+            }
+        }
+    }
+
     val servers: StateFlow<List<ServerEntry>>
         field = MutableStateFlow(emptyList())
 
@@ -163,6 +227,7 @@ object ServerBrowser {
                 }
 
                 SteamDiscovery.requestServerList()
+                SteamDiscovery.requestLobbyList()
             } finally {
                 isLoading.value = false
             }
@@ -176,6 +241,113 @@ object ServerBrowser {
 
         val isFav = ServerFavorites.isFavorited(ip, gamePort)
 
+        val tagsMissionData = parseGameTags(dto.gameTags).let { tags ->
+            MissionData(
+                pvpType = tags["t"],
+                moddedServer = tags["m"] == "1",
+                gameVersion = tags["v"],
+            )
+        }
+
+        var shouldEnrich = false
+        servers.update { current ->
+            val existingIndex = current.indexOfFirst {
+                it.fav.ip == ip && it.fav.gamePort == gamePort
+            }
+
+            val updatedList = if (existingIndex >= 0) {
+                val existing = current[existingIndex]
+                val merged = mergeMissionData(existing.missionData, tagsMissionData)
+                val resolvedInfo = if (existing.info != null && existing.info.map.length > info.map.length) {
+                    existing.info.copy(
+                        name = info.name,
+                        players = info.players,
+                        maxPlayers = info.maxPlayers,
+                        botPlayers = info.botPlayers,
+                        ping = info.ping,
+                        hasPassword = info.hasPassword,
+                        isSecure = info.isSecure,
+                        gameTags = info.gameTags,
+                        queryPort = info.queryPort,
+                        steamId = info.steamId,
+                        gameDir = info.gameDir,
+                    )
+                } else info
+                val updated = existing.copy(
+                    info = resolvedInfo,
+                    missionData = merged,
+                    isRefreshing = false,
+                )
+                shouldEnrich = info.queryPort > 0
+                current.toMutableList().apply { this[existingIndex] = updated }
+            } else {
+                shouldEnrich = info.queryPort > 0
+                current + ServerEntry(
+                    fav = ServerFavorites.FavoriteServer(ip, gamePort, dto.name),
+                    info = info,
+                    modlist = null,
+                    modStatuses = emptyList(),
+                    missionData = tagsMissionData,
+                    isDiscovered = !isFav,
+                )
+            }
+
+            updatedList.sortedWith(serverSortComparator).also { sorted ->
+                scope.launch {
+                    sorted.filter { it.info?.modlistUrl != null && it.modlist == null }.forEach { entry ->
+                        fetchModlistForServer(entry)
+                    }
+                }
+            }
+        }
+
+        if (shouldEnrich) {
+            scope.launch {
+                val entry = servers.value.find { it.fav.ip == ip && it.fav.gamePort == gamePort }
+                if (entry != null) enrichServerFromRules(entry)
+            }
+        }
+    }
+
+    fun onLobbyDiscovered(dto: LobbyInfoDTO) {
+        val ip = LOBBY_IP
+        val gamePort = dto.lobbyId
+        val mapDisplay = listOfNotNull(
+            dto.map.ifEmpty { null },
+            dto.mission.ifEmpty { null }
+        ).joinToString(" | ")
+        val info = SteamDiscovery.ServerInfo(
+            name = dto.name,
+            map = mapDisplay,
+            players = dto.members,
+            maxPlayers = dto.maxMembers,
+            botPlayers = 0,
+            ping = 0.milliseconds,
+            hasPassword = false,
+            isSecure = false,
+            steamId = dto.ownerId,
+            gameDir = "",
+            gameTags = "",
+            gamePort = gamePort,
+            queryPort = 0,
+            modlistUrl = null,
+            gameDescription = "",
+            appId = 0,
+            serverVersion = 0,
+            timeLastPlayed = Instant.fromEpochSeconds(0),
+        )
+
+        val incomingMissionData = MissionData(
+            missionName = dto.mission.ifEmpty { null },
+            mapName = dto.map.ifEmpty { null },
+            description = dto.missionDescription.ifEmpty { null },
+            pvpType = dto.missionPvpType.ifEmpty { null },
+            workshopId = dto.missionWorkshopId.ifEmpty { null },
+            startTime = dto.startTime.ifEmpty { null },
+            gameVersion = dto.version.ifEmpty { null },
+            moddedServer = dto.moddedServer == "1",
+        )
+
         servers.update { current ->
             val existingIndex = current.indexOfFirst {
                 it.fav.ip == ip && it.fav.gamePort == gamePort
@@ -183,10 +355,8 @@ object ServerBrowser {
 
             if (existingIndex >= 0) {
                 val existing = current[existingIndex]
-                val updated = existing.copy(
-                    info = info,
-                    isRefreshing = false,
-                )
+                val merged = mergeMissionData(existing.missionData, incomingMissionData)
+                val updated = existing.copy(info = info, missionData = merged, isRefreshing = false)
                 current.toMutableList().apply { this[existingIndex] = updated }
             } else {
                 current + ServerEntry(
@@ -194,18 +364,11 @@ object ServerBrowser {
                     info = info,
                     modlist = null,
                     modStatuses = emptyList(),
-                    isDiscovered = !isFav,
+                    missionData = incomingMissionData,
+                    isDiscovered = true,
+                    isLobby = true,
                 )
-            }.sortedWith(
-                compareByDescending<ServerEntry> { !it.isDiscovered }
-                    .thenByDescending { it.info?.players ?: 0 }
-            ).also { sorted ->
-                scope.launch {
-                    sorted.filter { it.info?.modlistUrl != null && it.modlist == null }.forEach { entry ->
-                        fetchModlistForServer(entry)
-                    }
-                }
-            }
+            }.sortedWith(serverSortComparator)
         }
     }
 
@@ -230,6 +393,7 @@ object ServerBrowser {
     fun refreshSteamServers() {
         if (SteamDiscovery.initResult.value == InitStatus.OK) {
             SteamDiscovery.requestServerList()
+            SteamDiscovery.requestLobbyList()
         }
     }
 
@@ -247,7 +411,10 @@ object ServerBrowser {
                     if (response.status.value in 200..299) {
                         json.decodeFromString<List<PackageReference>>(response.bodyAsText())
                     } else null
-                }.getOrNull()
+                }.getOrElse { e ->
+                    println("[NOMM] Failed to fetch modlist for ${entry.fav.ip}: ${e.message}")
+                    null
+                }
             }
 
             val statuses = modlist?.let { calculateModStatuses(it) } ?: emptyList()
@@ -305,10 +472,7 @@ object ServerBrowser {
                 if (e.fav.ip == ip && e.fav.gamePort == port) {
                     e.copy(isDiscovered = !ServerFavorites.isFavorited(ip, port))
                 } else e
-            }.sortedWith(
-                compareByDescending<ServerEntry> { !it.isDiscovered }
-                    .thenByDescending { it.info?.players ?: 0 }
-            )
+            }.sortedWith(serverSortComparator)
         }
     }
 
@@ -340,34 +504,19 @@ object ServerBrowser {
 
     fun launchWithMods(entry: ServerEntry) {
         scope.launch(Dispatchers.IO) {
-            entry.modlist?.let { modlist ->
-                val modlistIds = modlist.map { it.id }.toSet()
-                LocalMods.mods.value.forEach { (id, meta) ->
-                    if (id in LocalMods.protectedIds) return@forEach
-                    if (modlistIds.contains(id) && meta.enabled != true) {
-                        meta.enable()
-                    } else if (!modlistIds.contains(id) && meta.enabled == true) {
-                        meta.disable()
-                    }
-                }
-            }
+            entry.modlist?.let { syncModsToModlist(it) }
             launchNuclearOption()
         }
     }
 
     fun launchVanilla() {
         scope.launch(Dispatchers.IO) {
-            LocalMods.mods.value.forEach { (id, meta) ->
-                if (id in LocalMods.protectedIds) return@forEach
-                if (meta.enabled == true) {
-                    meta.disable()
-                }
-            }
+            disableAllMods()
             launchNuclearOption()
         }
     }
 
-    fun refreshServer(ip: String, gamePort: Int) {
+    fun refreshServer(ip: String, gamePort: Long) {
         if (SteamDiscovery.initResult.value != InitStatus.OK) return
         if (SteamDiscovery.isGameRunning()) return
 
@@ -396,7 +545,7 @@ object ServerBrowser {
         }
     }
 
-    fun setModlistFromRules(ip: String, gamePort: Int, modlist: List<PackageReference>) {
+    fun setModlistFromRules(ip: String, gamePort: Long, modlist: List<PackageReference>) {
         val statuses = calculateModStatuses(modlist)
         servers.update { current ->
             current.map {
@@ -407,22 +556,69 @@ object ServerBrowser {
         }
     }
 
+    fun setLobbyModlist(lobbyId: Long, modlist: List<PackageReference>) {
+        val statuses = calculateModStatuses(modlist)
+        servers.update { current ->
+            current.map {
+                if (it.fav.ip == LOBBY_IP && it.fav.gamePort == lobbyId) {
+                    it.copy(modlist = modlist, modStatuses = statuses)
+                } else it
+            }
+        }
+    }
+
+    fun updateMissionData(entry: ServerEntry, missionData: MissionData?) {
+        if (missionData == null) return
+        servers.update { current ->
+            current.map {
+                if (it.fav.ip == entry.fav.ip && it.fav.gamePort == entry.fav.gamePort) {
+                    it.copy(missionData = mergeMissionData(it.missionData, missionData))
+                } else it
+            }
+        }
+    }
+
+    private suspend fun enrichServerFromRules(entry: ServerEntry) {
+        val queryPort = entry.info?.queryPort ?: return
+        if (queryPort <= 0) return
+
+        val received = suspendCancellableCoroutine<Map<String, String>?> { cont ->
+            SteamDiscovery.queryRules(entry.fav.ip, queryPort) { rules ->
+                if (cont.isActive) cont.resumeWith(Result.success(rules))
+            }
+        } ?: return
+
+        val gameData = parseGameMissionData(received)
+        if (gameData == null) return
+
+        val enrichedMap = gameData.let { md ->
+            listOfNotNull(md.mapName, md.missionName).joinToString(" | ").ifEmpty { null }
+        }
+
+        servers.update { current ->
+            current.map {
+                if (it.fav.ip == entry.fav.ip && it.fav.gamePort == entry.fav.gamePort) {
+                    val mergedMission = mergeMissionData(it.missionData, gameData)
+                    val updatedInfo = if (enrichedMap != null && it.info != null) {
+                        it.info.copy(map = enrichedMap)
+                    } else it.info
+                    it.copy(info = updatedInfo, missionData = mergedMission)
+                } else it
+            }
+        }
+    }
+
     fun connectToServer(entry: ServerEntry) {
         scope.launch(Dispatchers.IO) {
-            // 1. Enable the server's required mods
-            entry.modlist?.let { modlist ->
-                val modlistIds = modlist.map { it.id }.toSet()
-                LocalMods.mods.value.forEach { (id, meta) ->
-                    if (id in LocalMods.protectedIds) return@forEach
-                    if (modlistIds.contains(id) && meta.enabled != true) {
-                        meta.enable()
-                    } else if (!modlistIds.contains(id) && meta.enabled == true) {
-                        meta.disable()
-                    }
-                }
+            // 1. Enable the server's required mods (or disable all for vanilla)
+            val modlist = entry.modlist
+            if (modlist != null) {
+                syncModsToModlist(modlist)
+            } else {
+                disableAllMods()
             }
 
-            // 2. Write connect request for NOMM-Integration plugin
+            // 2. Write connect request for NOSMR plugin
             val configDir = SettingsManager.gameFolder?.let { File(it, "BepInEx/config") }
             if (configDir == null) {
                 println("[NOMM] Cannot write connect request: game folder not set")
@@ -430,11 +626,34 @@ object ServerBrowser {
             }
             configDir.mkdirs()
 
-            val host = entry.fav.ip
-            val port = entry.fav.gamePort
-            val json = """{"host":"$host","port":$port,"password":null}"""
-            File(configDir, "nomm-connect.json").writeText(json)
-            println("[NOMM] Wrote connect request: $host:$port")
+            val connectJson = if (entry.isLobby) {
+                val lobbyId = entry.fav.gamePort
+                val metadata = suspendCancellableCoroutine<Map<String, String>?> { cont ->
+                    SteamDiscovery.queryLobbyMetadata(lobbyId) { rules ->
+                        if (cont.isActive) cont.resumeWith(Result.success(rules))
+                    }
+                }
+                val hostAddress = metadata?.get("HostAddress") ?: ""
+                println("[NOMM] Lobby $lobbyId hostAddress=$hostAddress")
+                buildJsonObject {
+                    put("host", hostAddress)
+                    put("port", 0)
+                    put("password", JsonNull)
+                    put("steamId", 0)
+                }.toString()
+            } else {
+                val host = entry.fav.ip
+                val port = entry.fav.gamePort
+                val steamId = entry.info?.steamId ?: 0L
+                println("[NOMM] Server $host:$port steamId=$steamId")
+                buildJsonObject {
+                    put("host", host)
+                    put("port", port)
+                    put("password", JsonNull)
+                    put("steamId", steamId)
+                }.toString()
+            }
+            File(configDir, "nomm-connect.json").writeText(connectJson)
 
             // 3. Launch game
             launchNuclearOption()

@@ -32,6 +32,7 @@ object SteamDiscovery {
 
     private val pendingPings = ConcurrentHashMap<String, (ServerInfo?) -> Unit>()
     private val pendingRulesCallbacks = ConcurrentHashMap<String, (Map<String, String>?) -> Unit>()
+    private val pendingLobbyMetadataCallbacks = ConcurrentHashMap<String, (Map<String, String>?) -> Unit>()
 
     suspend fun init(): InitStatus {
         lock.withLock {
@@ -88,8 +89,17 @@ object SteamDiscovery {
                         ServerBrowser.onSteamServerDiscovered(event.info)
                     }
 
+                    is WorkerEvent.LobbyDiscovered -> {
+                        ServerBrowser.onLobbyDiscovered(event.info)
+                    }
+
                     is WorkerEvent.RefreshComplete -> {
                         isRefreshing.value = false
+                    }
+
+                    is WorkerEvent.LobbyMetadataQueried -> {
+                        pendingLobbyMetadataCallbacks.remove(event.requestId)
+                            ?.invoke(event.rules)
                     }
 
                     is WorkerEvent.ServerPinged -> {
@@ -173,27 +183,36 @@ object SteamDiscovery {
         isRefreshing.value = false
     }
 
+    private var lastGameRunningCheck = 0L
+    private var lastGameRunningResult = false
+
     fun isGameRunning(): Boolean {
-        return try {
+        val now = System.currentTimeMillis()
+        if (now - lastGameRunningCheck < 5000) return lastGameRunningResult
+        lastGameRunningCheck = now
+
+        lastGameRunningResult = try {
             val os = System.getProperty("os.name").lowercase()
-            if (os.contains("win")) {
+            val output = if (os.contains("win")) {
                 val process = ProcessBuilder(
                     "powershell", "-NoProfile", "-Command",
                     "Get-Process -Name 'NuclearOption' -ErrorAction SilentlyContinue | Select-Object -First 1"
                 ).redirectErrorStream(true).start()
-                val output = process.inputStream.bufferedReader().use { it.readText() }
+                val result = process.inputStream.bufferedReader().use { it.readText() }
                 process.waitFor()
-                output.trim().isNotEmpty() && !output.contains("NoProcessFound")
+                result
             } else {
                 val process = ProcessBuilder("pgrep", "-f", "NuclearOption")
                     .redirectErrorStream(true).start()
-                val output = process.inputStream.bufferedReader().use { it.readText() }
+                val result = process.inputStream.bufferedReader().use { it.readText() }
                 process.waitFor()
-                output.trim().isNotEmpty()
+                result
             }
+            output.trim().isNotEmpty()
         } catch (e: Exception) {
             false
         }
+        return lastGameRunningResult
     }
 
     fun requestServerList() {
@@ -212,14 +231,39 @@ object SteamDiscovery {
         if (initResult.value != InitStatus.OK) return
         val requestId = java.util.UUID.randomUUID().toString()
         pendingPings[requestId] = onResult
-        ipc?.sendCommand(WorkerCommand.PingServer(ip, queryPort, requestId))
+        try {
+            ipc?.sendCommand(WorkerCommand.PingServer(ip, queryPort, requestId))
+        } catch (e: Exception) {
+            pendingPings.remove(requestId)
+        }
     }
 
     fun queryRules(ip: String, queryPort: Int, onResult: (Map<String, String>?) -> Unit) {
         if (initResult.value != InitStatus.OK) return
         val requestId = java.util.UUID.randomUUID().toString()
         pendingRulesCallbacks[requestId] = onResult
-        ipc?.sendCommand(WorkerCommand.QueryRules(ip, queryPort, requestId))
+        try {
+            ipc?.sendCommand(WorkerCommand.QueryRules(ip, queryPort, requestId))
+        } catch (e: Exception) {
+            pendingRulesCallbacks.remove(requestId)
+        }
+    }
+
+    fun requestLobbyList() {
+        if (initResult.value != InitStatus.OK) return
+        isRefreshing.value = true
+        ipc?.sendCommand(WorkerCommand.RequestLobbyList)
+    }
+
+    fun queryLobbyMetadata(lobbyId: Long, onResult: (Map<String, String>?) -> Unit) {
+        if (initResult.value != InitStatus.OK) return
+        val requestId = java.util.UUID.randomUUID().toString()
+        pendingLobbyMetadataCallbacks[requestId] = onResult
+        try {
+            ipc?.sendCommand(WorkerCommand.QueryLobbyMetadata(lobbyId, requestId))
+        } catch (e: Exception) {
+            pendingLobbyMetadataCallbacks.remove(requestId)
+        }
     }
 
     fun parseModsFromVersion(version: String?): List<PackageReference> {
@@ -271,23 +315,12 @@ object SteamDiscovery {
         val steamId: Long,
         val gameDir: String,
         val gameTags: String,
-        val gamePort: Int,
+        val gamePort: Long,
         val queryPort: Int,
         val modlistUrl: String?,
         val gameDescription: String,
         val appId: Int,
         val serverVersion: Int,
         val timeLastPlayed: Instant,
-    )
-
-    data class PlayerInfo(
-        val name: String,
-        val score: Int,
-        val timePlayedSeconds: Float,
-    )
-
-    data class ServerRule(
-        val key: String,
-        val ruleValue: String,
     )
 }

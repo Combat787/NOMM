@@ -40,7 +40,7 @@ sealed interface MainNavigation : NavKey {
     data class Mod(val modName: String) : MainNavigation
 
     @Serializable
-    data class Server(val ip: String, val port: Int) : MainNavigation
+    data class Server(val ip: String, val port: Long) : MainNavigation
 }
 
 @Serializable

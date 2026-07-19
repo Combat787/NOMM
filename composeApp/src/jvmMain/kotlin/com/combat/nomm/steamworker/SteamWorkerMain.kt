@@ -1,6 +1,7 @@
 package com.combat.nomm.steamworker
 
 import com.combat.nomm.*
+import kotlin.system.exitProcess
 
 fun main() {
     val ipc = SteamWorkerIPC(System.`in`, System.out)
@@ -30,6 +31,10 @@ fun main() {
                 is WorkerCommand.QueryRules -> service.queryRules(
                     command.ip, command.queryPort, command.requestId
                 )
+                is WorkerCommand.RequestLobbyList -> service.requestLobbyList()
+                is WorkerCommand.QueryLobbyMetadata -> service.queryLobbyMetadata(
+                    command.lobbyId, command.requestId
+                )
                 is WorkerCommand.Shutdown -> {
                     service.shutdown()
                     break
@@ -41,5 +46,5 @@ fun main() {
         }
     }
 
-    kotlin.system.exitProcess(0)
+    exitProcess(0)
 }

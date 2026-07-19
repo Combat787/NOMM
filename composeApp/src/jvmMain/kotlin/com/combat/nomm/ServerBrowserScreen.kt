@@ -17,7 +17,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun ServerBrowserScreen(
-    onOpenServer: (String, Int) -> Unit,
+    onOpenServer: (String, Long) -> Unit,
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val serverList by ServerBrowser.servers.collectAsState()
@@ -56,7 +56,7 @@ fun ServerBrowserScreen(
         query = searchQuery,
         onQueryChange = { searchQuery = it },
         placeholder = "Search servers...",
-        buttons =  {
+        buttons = {
             Button(
                 onClick = { ServerBrowser.refreshAll() },
                 modifier = Modifier.fillMaxHeight().pointerHoverIcon(PointerIcon.Hand),
@@ -84,6 +84,14 @@ fun ServerBrowserScreen(
 @Composable
 fun ServerItem(entry: ServerEntry, onClick: () -> Unit) {
     val isInstalling by ServerBrowser.isInstalling.collectAsState()
+
+    val missionName = remember(entry) {
+        entry.info?.map?.let { map ->
+            val parts = map.split(" | ", limit = 2)
+            if (parts.size == 2) parts[1].ifEmpty { null } else null
+        }
+    }
+
     ListScreenItem(
         buildAnnotatedString {
             withStyle(
@@ -93,7 +101,7 @@ fun ServerItem(entry: ServerEntry, onClick: () -> Unit) {
                 append(entry.displayName)
             }
         },
-        """""",
+        missionName ?: "",
         onClick = onClick,
         details = {
             ServerDetails(entry = entry)

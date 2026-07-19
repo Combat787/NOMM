@@ -11,7 +11,7 @@ import kotlin.time.Instant
 @Serializable
 data class ServerInfoDTO(
     val ip: String,
-    val gamePort: Int,
+    val gamePort: Long,
     val queryPort: Int,
     val name: String,
     val map: String,
@@ -29,6 +29,36 @@ data class ServerInfoDTO(
     val appId: Int,
     val serverVersion: Int,
     val timeLastPlayedEpochSec: Long,
+)
+
+@Serializable
+data class LobbyInfoDTO(
+    val lobbyId: Long,
+    val ownerId: Long,
+    val members: Int,
+    val maxMembers: Int,
+    val openMemberSpots: Int,
+    val name: String,
+    val map: String,
+    val mission: String,
+    val missionDescription: String,
+    val missionPvpType: String,
+    val missionWorkshopId: String,
+    val startTime: String,
+    val moddedServer: String,
+    val version: String,
+)
+
+@Serializable
+data class MissionData(
+    val missionName: String? = null,
+    val mapName: String? = null,
+    val description: String? = null,
+    val pvpType: String? = null,
+    val workshopId: String? = null,
+    val startTime: String? = null,
+    val gameVersion: String? = null,
+    val moddedServer: Boolean? = null,
 )
 
 fun ServerInfoDTO.toServerInfo() = SteamDiscovery.ServerInfo(
@@ -78,6 +108,15 @@ sealed class WorkerCommand {
     ) : WorkerCommand()
 
     @Serializable
+    data object RequestLobbyList : WorkerCommand()
+
+    @Serializable
+    data class QueryLobbyMetadata(
+        val lobbyId: Long,
+        val requestId: String,
+    ) : WorkerCommand()
+
+    @Serializable
     data object Shutdown : WorkerCommand()
 }
 
@@ -100,6 +139,15 @@ sealed class WorkerEvent {
 
     @Serializable
     data class RulesQueried(
+        val requestId: String,
+        val rules: Map<String, String>?,
+    ) : WorkerEvent()
+
+    @Serializable
+    data class LobbyDiscovered(val info: LobbyInfoDTO) : WorkerEvent()
+
+    @Serializable
+    data class LobbyMetadataQueried(
         val requestId: String,
         val rules: Map<String, String>?,
     ) : WorkerEvent()
@@ -133,9 +181,10 @@ class SteamWorkerIPC(private val input: InputStream, private val output: OutputS
 
     private fun writeFrame(payload: String) {
         val bytes = payload.toByteArray(Charsets.UTF_8)
+        val frame = ByteArray(4 + bytes.size)
+        java.nio.ByteBuffer.wrap(frame).putInt(bytes.size).put(bytes)
         synchronized(writeLock) {
-            output.write(ByteBuffer.allocate(4).putInt(bytes.size).array())
-            output.write(bytes)
+            output.write(frame)
             output.flush()
         }
     }

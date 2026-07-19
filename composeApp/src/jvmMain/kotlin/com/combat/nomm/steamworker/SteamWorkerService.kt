@@ -6,6 +6,7 @@ import java.io.File
 
 class SteamWorkerService(private val ipc: SteamWorkerIPC) {
     private var matchmaking: SteamMatchmakingServers? = null
+    private var matchmakingLobby: SteamMatchmaking? = null
     private var currentRequest: SteamServerListRequest? = null
     @Volatile private var running = false
 
@@ -21,6 +22,77 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
             SteamAPI.InitResult.OK -> {
                 running = true
                 matchmaking = SteamMatchmakingServers()
+                matchmakingLobby = SteamMatchmaking(object : SteamMatchmakingCallback {
+                    override fun onFavoritesListChanged(
+                        int: Int, int1: Int, int2: Int, int3: Int, int4: Int,
+                        boolean: Boolean, int5: Int
+                    ) {}
+                    override fun onLobbyInvite(
+                        steamIDUser: SteamID, steamIDLobby: SteamID, gameID: Long
+                    ) {}
+                    override fun onLobbyEnter(
+                        steamIDLobby: SteamID, numLocked: Int, chatPermissions: Boolean,
+                        response: SteamMatchmaking.ChatRoomEnterResponse
+                    ) {}
+                    override fun onLobbyDataUpdate(
+                        steamIDLobby: SteamID, steamIDMember: SteamID, success: Boolean
+                    ) {}
+                    override fun onLobbyChatUpdate(
+                        steamIDLobby: SteamID, steamIDUserChanged: SteamID,
+                        steamIDMakingChange: SteamID, stateChange: SteamMatchmaking.ChatMemberStateChange
+                    ) {}
+                    override fun onLobbyChatMessage(
+                        steamIDLobby: SteamID, steamIDUser: SteamID,
+                        entryType: SteamMatchmaking.ChatEntryType, chatID: Int
+                    ) {}
+                    override fun onLobbyGameCreated(
+                        steamIDLobby: SteamID, steamIDGameServer: SteamID, ip: Int, port: Short
+                    ) {}
+                    override fun onLobbyMatchList(lobbiesMatching: Int) {
+                        val mm = matchmakingLobby ?: return
+                        for (i in 0 until lobbiesMatching) {
+                            val lobbyId = mm.getLobbyByIndex(i)
+                            val lobbyIdLong = SteamNativeHandle.getNativeHandle(lobbyId)
+                            val owner = mm.getLobbyOwner(lobbyId)
+                            val ownerLong = SteamNativeHandle.getNativeHandle(owner)
+                            val members = mm.getNumLobbyMembers(lobbyId)
+                            val maxMembers = mm.getLobbyMemberLimit(lobbyId)
+                            val openSpots = maxMembers - members
+                            val name = mm.getLobbyData(lobbyId, "name")
+                            val map = mm.getLobbyData(lobbyId, "map_name")
+                            val mission = mm.getLobbyData(lobbyId, "mission_name")
+                            val missionDescription = mm.getLobbyData(lobbyId, "mission_description")
+                            val missionPvpType = mm.getLobbyData(lobbyId, "mission_pvp_type")
+                            val missionWorkshopId = mm.getLobbyData(lobbyId, "mission_workshop_id")
+                            val startTime = mm.getLobbyData(lobbyId, "start_time")
+                            val moddedServer = mm.getLobbyData(lobbyId, "modded_server")
+                            val version = mm.getLobbyData(lobbyId, "version")
+                            ipc.sendEvent(WorkerEvent.LobbyDiscovered(
+                                LobbyInfoDTO(
+                                    lobbyId = lobbyIdLong,
+                                    ownerId = ownerLong,
+                                    members = members,
+                                    maxMembers = maxMembers,
+                                    openMemberSpots = openSpots,
+                                    name = name,
+                                    map = map,
+                                    mission = mission,
+                                    missionDescription = missionDescription,
+                                    missionPvpType = missionPvpType,
+                                    missionWorkshopId = missionWorkshopId,
+                                    startTime = startTime,
+                                    moddedServer = moddedServer,
+                                    version = version,
+                                )
+                            ))
+                        }
+                    }
+                    override fun onLobbyKicked(
+                        steamIDLobby: SteamID, steamIDAdmin: SteamID, kickedDueToDisconnect: Boolean
+                    ) {}
+                    override fun onLobbyCreated(result: SteamResult, steamIDLobby: SteamID) {}
+                    override fun onFavoritesListAccountsUpdated(result: SteamResult) {}
+                })
                 startCallbackLoop()
                 ipc.sendEvent(WorkerEvent.InitComplete(InitStatus.OK))
             }
@@ -33,7 +105,7 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
         }
     }
 
-    fun startCallbackLoop() {
+    private fun startCallbackLoop() {
         val thread = Thread({
             while (running) {
                 try {
@@ -88,6 +160,24 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
         currentRequest = null
     }
 
+    fun requestLobbyList() {
+        matchmakingLobby?.requestLobbyList()
+    }
+
+    fun queryLobbyMetadata(lobbyId: Long, requestId: String) {
+        val mm = matchmakingLobby ?: return
+        val lobbySteamId = SteamID.createFromNativeHandle(lobbyId)
+        val rules = mutableMapOf<String, String>()
+        val count = mm.getLobbyDataCount(lobbySteamId)
+        for (i in 0 until count) {
+            val kvp = SteamMatchmakingKeyValuePair()
+            if (mm.getLobbyDataByIndex(lobbySteamId, i, kvp)) {
+                rules[kvp.key] = kvp.value
+            }
+        }
+        ipc.sendEvent(WorkerEvent.LobbyMetadataQueried(requestId, rules.toMap()))
+    }
+
     fun pingServer(ip: String, queryPort: Int, requestId: String) {
         val mm = matchmaking ?: return
         val response = object : SteamMatchmakingPingResponse() {
@@ -127,13 +217,15 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
     fun shutdown() {
         running = false
         cancelQuery()
+        matchmakingLobby?.dispose()
+        matchmakingLobby = null
         runCatching { SteamAPI.shutdown() }
     }
 
     private fun SteamMatchmakingGameServerItem.toDTO(): ServerInfoDTO {
         val connectionAddress = netAdr.connectionAddressString
         val ip = connectionAddress.substringBeforeLast(":")
-        val gamePort = connectionAddress.substringAfterLast(":").toIntOrNull() ?: 0
+        val gamePort = connectionAddress.substringAfterLast(":").toLongOrNull() ?: 0L
         val queryPort = netAdr.queryPort.toInt() and 0xFFFF
 
         return ServerInfoDTO(
@@ -161,7 +253,10 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
 
     private fun ipToInt(ip: String): Int {
         val parts = ip.split(".")
-        return parts.fold(0) { acc, part -> (acc shl 8) or part.trim().toInt() }
+        if (parts.size != 4) return 0
+        return try {
+            parts.fold(0) { acc, part -> (acc shl 8) or part.trim().toInt() }
+        } catch (e: NumberFormatException) { 0 }
     }
 
     private fun loadLibraries(): Boolean {
@@ -188,18 +283,20 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
                 }
 
                 for (candidate in candidates) {
-                    val stream = javaClass.getResourceAsStream("/$candidate") ?: continue
-                    val tmpDir = File(System.getProperty("java.io.tmpdir"), "steamworks4j")
-                    tmpDir.mkdirs()
-                    val tmpFile = File(tmpDir, candidate)
-                    tmpFile.writeBytes(stream.readBytes())
-                    stream.close()
-                    try {
-                        System.load(tmpFile.absolutePath)
-                        return true
-                    } catch (e: UnsatisfiedLinkError) {
-                        System.err.println("[SteamWorker] Failed to load $candidate: ${e.message}")
-                    }
+                    val loaded = javaClass.getResourceAsStream("/$candidate")?.use { stream ->
+                        val tmpDir = File(System.getProperty("java.io.tmpdir"), "steamworks4j")
+                        tmpDir.mkdirs()
+                        val tmpFile = File(tmpDir, candidate)
+                        tmpFile.writeBytes(stream.readBytes())
+                        try {
+                            System.load(tmpFile.absolutePath)
+                            true
+                        } catch (e: UnsatisfiedLinkError) {
+                            System.err.println("[SteamWorker] Failed to load $candidate: ${e.message}")
+                            false
+                        }
+                    } ?: false
+                    if (loaded) return true
                 }
 
                 try {
