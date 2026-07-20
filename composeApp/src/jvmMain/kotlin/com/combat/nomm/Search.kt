@@ -179,7 +179,7 @@ fun rememberFilteredServers(
                 SortType.DURATION -> servers.sortedByDescending { it.info?.timeLastPlayed }
             }
 
-            servers.sortedBy { it.isFavorite }
+            servers.sortedByDescending { it.isFavorite }
         },
         onFilterQuery = { items, query ->
             items.sortFilterByQuery(query, minSimilarity = 0.3) { entry, q ->

@@ -48,7 +48,7 @@ val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState p
 @OptIn(FlowPreview::class, ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
 
-    if (args.contains("--worker")) {
+    if (args.contains("worker")) {
         runSteamWorker()
         return
     }

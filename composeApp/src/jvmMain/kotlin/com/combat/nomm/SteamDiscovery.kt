@@ -152,18 +152,18 @@ object SteamDiscovery {
         val commandList = if (isJavaBinary) {
             val classPath = System.getProperty("java.class.path")
                 ?: error("Cannot determine classpath")
-            
+
             listOf(
                 processPath,
                 "--enable-native-access=ALL-UNNAMED",
                 "-cp", classPath,
                 "com.combat.nomm.MainKt",
-                "--worker"
+                "worker"
             )
         } else {
             listOf(
                 processPath,
-                "--worker"
+                "worker"
             )
         }
 
@@ -292,21 +292,6 @@ object SteamDiscovery {
         } catch (_: Exception) {
             pendingLobbyMetadataCallbacks.remove(requestId)
         }
-    }
-
-    private fun parseModEntry(entry: String): PackageReference? {
-        val trimmed = entry.trim()
-        val lastVIndex = trimmed.lastIndexOf("-v")
-        if (lastVIndex < 0) return null
-
-        val modId = trimmed.substring(0, lastVIndex)
-        val versionStr = trimmed.substring(lastVIndex + 2)
-        if (modId.isBlank() || versionStr.isBlank()) return null
-
-        val versionParts = versionStr.split(".").mapNotNull { it.toIntOrNull() }
-        if (versionParts.isEmpty()) return null
-
-        return PackageReference(id = modId, version = Version(*versionParts.toIntArray()))
     }
 
     data class ServerInfo(
