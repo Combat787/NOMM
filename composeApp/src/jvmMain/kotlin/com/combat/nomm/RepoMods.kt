@@ -38,7 +38,7 @@ object RepoMods {
             }
             val updatable = LocalMods.mods.value.filter { it.value.hasUpdate }
                 .mapNotNull { mods.value[it.key] }
-            if (updatable.isNotEmpty() || SettingsManager.config.value.ignoreNewUpdates) {
+            if (updatable.isNotEmpty() && !SettingsManager.config.value.ignoreNewUpdates) {
                 SettingsManager.criticalInformation.add(
                     Triple(
                         "${updatable.size} Available Mod Update${if (updatable.size > 1) "s" else ""}",

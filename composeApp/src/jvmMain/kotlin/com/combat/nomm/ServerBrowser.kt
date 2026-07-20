@@ -411,7 +411,7 @@ object ServerBrowser {
             val repo = repoMods[ref.id]
 
             when {
-                local != null && local.enabled == true -> {
+                local != null -> {
                     val localVersion = local.artifact?.version
                     val serverVersion = ref.version
 
@@ -420,9 +420,6 @@ object ServerBrowser {
                     } else {
                         ServerModStatus(ref, ModStatus.MATCH, localVersion, serverVersion)
                     }
-                }
-                local != null -> {
-                    ServerModStatus(ref, ModStatus.MATCH, local.artifact?.version, ref.version)
                 }
                 repo != null -> {
                     ServerModStatus(ref, ModStatus.NEED_INSTALL, null, ref.version)

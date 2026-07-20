@@ -2,21 +2,14 @@ package com.combat.nomm
 
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.filesDir
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import java.io.File
-import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlin.io.path.exists
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -148,25 +141,42 @@ object SteamDiscovery {
 
         return dataDir
     }
-
     private fun spawnWorker(): Process {
         val processPath = ProcessHandle.current().info().command().orElse(null)
             ?: error("Cannot determine process command path")
 
         val workingDir = extractSteamAppId()
 
-        println("[NOMM] Spawning worker process via: $processPath inside CWD: ${workingDir.absolutePath}")
+        val isJavaBinary = processPath.lowercase().let { it.endsWith("java.exe") || it.endsWith("java") }
 
-        return ProcessBuilder(
-            processPath,
-            "--worker"
-        ).apply {
+        val commandList = if (isJavaBinary) {
+            val classPath = System.getProperty("java.class.path")
+                ?: error("Cannot determine classpath")
+            
+            listOf(
+                processPath,
+                "--enable-native-access=ALL-UNNAMED",
+                "-cp", classPath,
+                "com.combat.nomm.MainKt",
+                "--worker"
+            )
+        } else {
+            listOf(
+                processPath,
+                "--worker"
+            )
+        }
+
+        println("[NOMM] Spawning worker process via: ${commandList.joinToString(" ")}")
+
+        return ProcessBuilder(commandList).apply {
             directory(workingDir)
             redirectErrorStream(false)
             redirectError(ProcessBuilder.Redirect.INHERIT)
         }.start()
     }
-
+    
+    
     suspend fun shutdown() {
         lock.withLock {
             println("[NOMM] Steam shutdown")
@@ -227,7 +237,7 @@ object SteamDiscovery {
                 result
             }
             output.trim().isNotEmpty()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
         return lastGameRunningResult
@@ -251,7 +261,7 @@ object SteamDiscovery {
         pendingPings[requestId] = onResult
         try {
             ipc?.sendCommand(WorkerCommand.PingServer(ip, queryPort, requestId))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             pendingPings.remove(requestId)
         }
     }
@@ -262,7 +272,7 @@ object SteamDiscovery {
         pendingRulesCallbacks[requestId] = onResult
         try {
             ipc?.sendCommand(WorkerCommand.QueryRules(ip, queryPort, requestId))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             pendingRulesCallbacks.remove(requestId)
         }
     }
@@ -279,31 +289,9 @@ object SteamDiscovery {
         pendingLobbyMetadataCallbacks[requestId] = onResult
         try {
             ipc?.sendCommand(WorkerCommand.QueryLobbyMetadata(lobbyId, requestId))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             pendingLobbyMetadataCallbacks.remove(requestId)
         }
-    }
-
-    fun parseModsFromVersion(version: String?): List<PackageReference> {
-        if (version.isNullOrBlank()) return emptyList()
-
-        val gameVersionMatch = Regex("""^(\d+\.\d+\.\d+)""").find(version) ?: return emptyList()
-        val gameVersion = gameVersionMatch.groupValues[1]
-        val rest = version.substring(gameVersion.length)
-
-        if (!rest.startsWith("_")) return emptyList()
-        val afterGameVersion = rest.removePrefix("_")
-        if (afterGameVersion.isBlank()) return emptyList()
-
-        if (afterGameVersion.contains("_--")) {
-            return afterGameVersion.split("_--").mapNotNull { parseModEntry(it) }
-        }
-
-        if (afterGameVersion.contains("-v")) {
-            return listOfNotNull(parseModEntry(afterGameVersion))
-        }
-
-        return emptyList()
     }
 
     private fun parseModEntry(entry: String): PackageReference? {

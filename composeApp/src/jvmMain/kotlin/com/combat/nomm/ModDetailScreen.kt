@@ -203,9 +203,9 @@ fun ModActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (version != null && taskState == null && modMeta?.isUnidentified ?: true) {
+        if (version != null && modMeta?.isUnidentified ?: true) {
             val latest = mod.artifacts.maxOf { it.version }
-            if (modMeta?.artifact?.version != version && version != latest) {
+            if ((modMeta?.artifact?.version != version) && (version != latest)) {
                 val text = "Install $version"
                 TooltipBox(
                     positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
