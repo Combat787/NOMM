@@ -18,21 +18,6 @@ fun parseModlistUrlFromName(serverName: String): String? {
     return regex.find(serverName)?.groupValues?.getOrNull(1)
 }
 
-fun extractSteamAppId() {
-    runCatching {
-        val cwd = File(System.getProperty("user.dir"))
-        val target = File(cwd, "steam_appid.txt")
-        if (!target.exists()) {
-            val stream = Thread.currentThread().contextClassLoader.getResourceAsStream("steam_appid.txt")
-            if (stream != null) {
-                target.writeBytes(stream.readBytes())
-                stream.close()
-                println("[NOMM] Extracted steam_appid.txt to ${target.absolutePath}")
-            }
-        }
-    }
-}
-
 fun fixSteamSdkPath() {
     val home = File(System.getProperty("user.home"))
     val sdk64Dir = File(home, ".steam/sdk64")

@@ -1,5 +1,7 @@
 package com.combat.nomm
 
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.filesDir
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -10,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -45,7 +48,6 @@ object SteamDiscovery {
             if (System.getProperty("os.name").lowercase().let { !it.contains("win") && !it.contains("mac") }) {
                 fixSteamSdkPath()
             }
-            extractSteamAppId()
 
             initDeferred = CompletableDeferred()
 
@@ -132,17 +134,34 @@ object SteamDiscovery {
             }
         }
     }
+    private fun extractSteamAppId(): File {
+        val dataDir = FileKit.filesDir.file
+        val appIdFile = File(dataDir, "steam_appid.txt")
+        
+        if (!appIdFile.exists()) {
+            val resourceStream = SteamDiscovery::class.java.getResourceAsStream("/steam_appid.txt")
+                ?: error("steam_appid.txt not found in app resources!")
+
+            appIdFile.writeBytes(resourceStream.readBytes())
+            println("[NOMM] Extracted steam_appid.txt to: ${appIdFile.absolutePath}")
+        }
+
+        return dataDir
+    }
 
     private fun spawnWorker(): Process {
         val processPath = ProcessHandle.current().info().command().orElse(null)
             ?: error("Cannot determine process command path")
 
-        println("[NOMM] Spawning worker process via: $processPath")
+        val workingDir = extractSteamAppId()
+
+        println("[NOMM] Spawning worker process via: $processPath inside CWD: ${workingDir.absolutePath}")
 
         return ProcessBuilder(
             processPath,
             "--worker"
         ).apply {
+            directory(workingDir)
             redirectErrorStream(false)
             redirectError(ProcessBuilder.Redirect.INHERIT)
         }.start()

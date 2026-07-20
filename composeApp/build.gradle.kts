@@ -131,7 +131,7 @@ nucleus.application {
         cleanupNativeLibs = true
         enableAotCache = false
         homepage = "https://github.com/Combat787/NOMM"
-
+        appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
         compressionLevel = CompressionLevel.Normal
         fileAssociation(
             mimeType = "application/nommpack",
@@ -153,7 +153,6 @@ nucleus.application {
                 uninstallerIcon.set(project.file("packaging/uninstaller.ico"))
                 license.set(project.file("LICENSE"))
             }
-            console = true
         }
 
         linux {

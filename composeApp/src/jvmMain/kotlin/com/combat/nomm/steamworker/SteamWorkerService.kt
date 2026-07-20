@@ -11,7 +11,6 @@ class SteamWorkerService(private val ipc: SteamWorkerIPC) {
     @Volatile private var running = false
 
     fun init() {
-        extractSteamAppId()
 
         if (!loadLibraries()) {
             ipc.sendEvent(WorkerEvent.InitComplete(InitStatus.FailedGeneric))
