@@ -55,7 +55,7 @@ fun SettingsScreen() {
             SettingsGroup(title = "About") {
                 SettingsInfoRow(
                     infoName = "Nuclear Option Mod Manager",
-                    infoData = "by Combat"
+                    infoData = "by Combat and RaylaValdez"
                 )
                 ClickableSettingsRow(
                     "Version ${BuildKonfig.VERSION}",

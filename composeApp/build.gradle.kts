@@ -24,6 +24,7 @@ val appVersion = "5.0.0"
 val changelog = """
     Added a Server List where you can directly join other Servers and if the Server supports it or the host is using NOMM can autoinstall Mods.
     For Dedicated Server Hosts please check out https://github.com/RaylaValdez/NOSMR to implement support for your own Servers.
+    Do not expect immediate support by every Dedicated Server.
     And big thanks to Gerry of Ravine/RaylaValdez who had the idea and implemented most of the backend for this.
 """.trimIndent()
 
