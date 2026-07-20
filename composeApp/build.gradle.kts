@@ -1,23 +1,19 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec
-import dev.nucleusframework.desktop.application.dsl.CompressionLevel
-import dev.nucleusframework.desktop.application.dsl.PublishMode
-import dev.nucleusframework.desktop.application.dsl.ReleaseChannel
-import dev.nucleusframework.desktop.application.dsl.ReleaseType
-import dev.nucleusframework.desktop.application.dsl.TargetFormat
+import dev.nucleusframework.desktop.application.dsl.*
 
 
 plugins {
-        alias(libs.plugins.kotlinMultiplatform)
-        alias(libs.plugins.composeMultiplatform)
-        alias(libs.plugins.composeCompiler)
-    
-    
-        alias(libs.plugins.nucleus)
-    
-    
-        alias(libs.plugins.kotlin.serialization)
-        alias(libs.plugins.buildkonfig)
-    }
+    alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.composeMultiplatform)
+    alias(libs.plugins.composeCompiler)
+
+
+    alias(libs.plugins.nucleus)
+
+
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.buildkonfig)
+}
 
 val appVersion = "5.0.0"
 
@@ -73,20 +69,18 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.filekit.core)
             implementation(libs.filekit.dialogs.compose)
-            
+
             implementation(libs.coil)
             implementation(libs.coil.ktor)
-            
+
             implementation(libs.materialKolor)
 
             implementation(libs.jetbrains.navigation3.ui)
-            
+            implementation(libs.steamworks4j)
+
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
             implementation("org.slf4j:slf4j-simple:2.0.17")
-        }
-        jvmMain.dependencies {
-            implementation(libs.steamworks4j)
         }
     }
 }
@@ -104,7 +98,7 @@ nucleus.application {
     jvmArgs += listOf(
         "--enable-native-access=ALL-UNNAMED",
     )
-    
+
     val authorEmail = "787combat787@gmail.com"
     nativeDistributions {
         targetFormats(
@@ -118,25 +112,26 @@ nucleus.application {
         )
 
         modules(
+            "java.base", "java.desktop", "java.logging",
             "jdk.security.auth",
             "java.management",
             "java.desktop",
             "java.naming",
             "jdk.unsupported"
         )
-
+        
         appName = "Nuclear Option Mod Manager"
         packageName = "NOMM"
         packageVersion = appVersion
         vendor = "Combat"
         description = "A Mod Manager For Nuclear Option"
-        
+
         artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
-        
+
         cleanupNativeLibs = true
         enableAotCache = false
         homepage = "https://github.com/Combat787/NOMM"
-        
+
         compressionLevel = CompressionLevel.Normal
         fileAssociation(
             mimeType = "application/nommpack",
@@ -158,8 +153,9 @@ nucleus.application {
                 uninstallerIcon.set(project.file("packaging/uninstaller.ico"))
                 license.set(project.file("LICENSE"))
             }
+            console = true
         }
-        
+
         linux {
             shortcut = true
             packageName = "NOMM"
@@ -167,7 +163,7 @@ nucleus.application {
             debMaintainer = "Combat <${authorEmail}>"
             iconFile.set(project.file("icons/icon.png"))
         }
-        
+
         macOS {
             bundleID = "com.combat.nomm"
         }

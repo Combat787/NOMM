@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
 import com.combat.nomm.LocalMods.refresh
+import com.combat.nomm.steamworker.runSteamWorker
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.aotTraining
 import dev.nucleusframework.application.nucleusApplication
@@ -46,6 +47,11 @@ val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState p
 
 @OptIn(FlowPreview::class, ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
+
+    if (args.contains("--worker")) {
+        runSteamWorker()
+        return
+    }
     val formattedArgs = args.map { arg ->
         val file = File(arg)
         if (file.exists()) "file:///" + file.toURI().toString().removePrefix("file:/") else arg

@@ -10,8 +10,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.io.path.exists
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -132,17 +134,14 @@ object SteamDiscovery {
     }
 
     private fun spawnWorker(): Process {
-        val javaHome = System.getProperty("java.home")
-        val javaBin = "$javaHome/bin/java"
-        val classPath = System.getProperty("java.class.path")
-            ?: error("Cannot determine classpath for steam-worker")
+        val processPath = ProcessHandle.current().info().command().orElse(null)
+            ?: error("Cannot determine process command path")
 
-        println("[NOMM] Spawning steam-worker")
+        println("[NOMM] Spawning worker process via: $processPath")
+
         return ProcessBuilder(
-            javaBin,
-            "--enable-native-access=ALL-UNNAMED",
-            "-cp", classPath,
-            "com.combat.nomm.steamworker.SteamWorkerMainKt"
+            processPath,
+            "--worker"
         ).apply {
             redirectErrorStream(false)
             redirectError(ProcessBuilder.Redirect.INHERIT)

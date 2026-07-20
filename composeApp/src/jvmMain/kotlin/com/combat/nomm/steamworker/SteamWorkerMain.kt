@@ -3,7 +3,7 @@ package com.combat.nomm.steamworker
 import com.combat.nomm.*
 import kotlin.system.exitProcess
 
-fun main() {
+fun runSteamWorker() {
     val ipc = SteamWorkerIPC(System.`in`, System.out)
     val service = SteamWorkerService(ipc)
 
