@@ -11,6 +11,10 @@ A Mod Manager for the Game Nuclear Option
 - Adding Mods from Files
 - Mod toggling
 - Mod Uninstalling
+- Modpack Sharing
+- Server List
+- Direct Server Connect
+- Automatic Server Modpack resolution
 - Customizable Theme
 
 
@@ -30,7 +34,10 @@ Download the appropriate file for your platform from the [Latest Release](https:
 
 To work NOMM retrieves a manifest from [NOMNOM](https://github.com/KopterBuzz/NOMNOM) to get the list of mods. To add your own mods go there.
 
-App Icon made by Shumatsu
+## Credits
+- [RaylaValdez](https://github.com/RaylaValdez): `Server List Backend and NOSMR`
+- Shumatsu: `App Icon`
+- [Combat](https://github.com/Combat787): `The Rest`
 
 This is a Kotlin Multiplatform project targeting Desktop (JVM).
 

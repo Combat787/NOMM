@@ -17,14 +17,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowState
-import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.combat.nomm.LocalMods.refresh
-import io.github.kdroidfilter.nucleus.aot.runtime.AotRuntime
-import io.github.kdroidfilter.nucleus.core.runtime.SingleInstanceManager
-import io.github.kdroidfilter.nucleus.darkmodedetector.isSystemInDarkMode
-import io.github.kdroidfilter.nucleus.window.material.MaterialDecoratedWindow
-import io.github.kdroidfilter.nucleus.window.material.MaterialTitleBar
+import dev.nucleusframework.application.NucleusBackend
+import dev.nucleusframework.application.aotTraining
+import dev.nucleusframework.application.nucleusApplication
+import dev.nucleusframework.darkmodedetector.isSystemInDarkMode
+import dev.nucleusframework.window.material.MaterialDecoratedWindow
+import dev.nucleusframework.window.material.MaterialTitleBar
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.FlowPreview
@@ -36,9 +36,8 @@ import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
 import java.io.File
 import java.net.URI
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
-import kotlin.system.exitProcess
+import kotlin.io.path.toPath
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 
@@ -47,54 +46,32 @@ val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState p
 
 @OptIn(FlowPreview::class, ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
-    if (AotRuntime.isTraining()) {
-        Thread({
-            Thread.sleep(45000)
-            exitProcess(0)
-        }, "aot-timer").apply {
-            isDaemon = false
-            start()
-        }
-    }
+    val formattedArgs = args.map { arg ->
+        val file = File(arg)
+        if (file.exists()) "file:///" + file.toURI().toString().removePrefix("file:/") else arg
+    }.toTypedArray()
+    nucleusApplication(
+        args = formattedArgs,
+        backend = NucleusBackend.Tao,
+        enableSingleInstance = true
+    ) {
+        aotTraining(1.minutes) {}
 
-    application {
-        var restoreRequested by remember { mutableStateOf(false) }
-
-        val isSingle = remember {
-            SingleInstanceManager.isSingleInstance(
-                onRestoreFileCreated = {
-                    val clickedFile = args.firstOrNull()
-                    if (clickedFile != null) {
-                        this.writeText(clickedFile)
-                    }
-                },
-                onRestoreRequest = {
-                    val clickedFile = this.readText().trim()
-                    if (clickedFile.endsWith("nomm.json") || clickedFile.endsWith("nommpack")) {
-                        LocalMods.importMods(PlatformFile(clickedFile))
-                    }
-                    restoreRequested = true
-                },
-            )
-        }
-
-        if (!isSingle) {
-            exitApplication()
-            return@application
+        onDeepLink { uri ->
+            println(uri)
+            LocalMods.importMods(
+                PlatformFile(uri.toPath().toFile()))
         }
 
         LaunchedEffect(Unit) {
+            initializeSevenZipNative()
             val initialFile = args.firstOrNull()
             if (initialFile != null && (initialFile.endsWith("nomm.json") || initialFile.endsWith("nommpack"))) {
                 LocalMods.importMods(PlatformFile(initialFile))
             }
-
-
             refresh()
         }
-        
-        
-        initializeSevenZipNative()
+
         FileKit.init("NOMM")
         val configuration by SettingsManager.config
 
@@ -119,6 +96,9 @@ fun main(args: Array<String>) {
                         SettingsManager.saveConfig()
                         SettingsManager.saveCachedManifest()
                     }
+                    runBlocking {
+                        SteamDiscovery.shutdown()
+                    }
                     exitApplication()
                 },
                 title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",
@@ -126,13 +106,6 @@ fun main(args: Array<String>) {
                 minimumSize = DpSize(800.dp, 600.dp),
                 state = windowState,
             ) {
-                LaunchedEffect(restoreRequested) {
-                    if (restoreRequested) {
-                        window.toFront()
-                        window.requestFocus()
-                        restoreRequested = false
-                    }
-                }
                 LaunchedEffect(windowState) {
                     snapshotFlow { windowState }
                         .distinctUntilChanged()

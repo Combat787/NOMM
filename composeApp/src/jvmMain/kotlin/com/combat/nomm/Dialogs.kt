@@ -11,10 +11,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.nucleus.updater.NucleusUpdater
-import io.github.kdroidfilter.nucleus.updater.UpdateEvent
-import io.github.kdroidfilter.nucleus.updater.UpdateInfo
-import io.github.kdroidfilter.nucleus.updater.UpdateResult
+import dev.nucleusframework.updater.NucleusUpdater
+import dev.nucleusframework.updater.UpdateEvent
+import dev.nucleusframework.updater.UpdateInfo
+import dev.nucleusframework.updater.UpdateResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch

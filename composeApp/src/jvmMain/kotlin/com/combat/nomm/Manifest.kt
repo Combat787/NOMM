@@ -2,6 +2,7 @@ package com.combat.nomm
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import java.security.MessageDigest
 import java.util.concurrent.ThreadLocalRandom
 
 typealias Manifest = List<Extension>
@@ -45,6 +46,27 @@ data class PackageReference(
     val version: Version? = null
 )
 
+
+fun computeModHashPrefix(id: String, version: Version): String {
+    val input = "$id|$version"
+    val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+    return buildString(6) {
+        for (i in 0 until 3) {
+            append(Integer.toHexString(digest[i].toInt() and 0xFF).padStart(2, '0'))
+        }
+    }
+}
+
+fun buildModHashLookup(manifest: Manifest): Map<String, PackageReference> {
+    val lookup = HashMap<String, PackageReference>()
+    manifest.forEach { ext ->
+        ext.artifacts.forEach { artifact ->
+            val hashPrefix = computeModHashPrefix(ext.id, artifact.version)
+            lookup[hashPrefix] = PackageReference(ext.id, artifact.version)
+        }
+    }
+    return lookup
+}
 
 fun fetchFakeManifest(): List<Extension> {
     val latinWords = arrayOf(

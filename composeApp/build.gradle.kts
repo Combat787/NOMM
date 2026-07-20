@@ -1,24 +1,31 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.CompressionLevel
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.PublishMode
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.ReleaseChannel
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.ReleaseType
-import io.github.kdroidfilter.nucleus.desktop.application.dsl.TargetFormat
+import dev.nucleusframework.desktop.application.dsl.CompressionLevel
+import dev.nucleusframework.desktop.application.dsl.PublishMode
+import dev.nucleusframework.desktop.application.dsl.ReleaseChannel
+import dev.nucleusframework.desktop.application.dsl.ReleaseType
+import dev.nucleusframework.desktop.application.dsl.TargetFormat
 
 
 plugins {
         alias(libs.plugins.kotlinMultiplatform)
         alias(libs.plugins.composeMultiplatform)
         alias(libs.plugins.composeCompiler)
+    
+    
         alias(libs.plugins.nucleus)
+    
+    
         alias(libs.plugins.kotlin.serialization)
         alias(libs.plugins.buildkonfig)
     }
 
-val appVersion = "4.9.1"
+val appVersion = "5.0.0"
 
 val changelog = """
-    Fixed exporting/importing Modpacks with Local Mods that are not a single File.
+    Added a Server List where you can directly join other Servers and if the Server supports it or the host is using NOMM can autoinstall Mods.
+    For Dedicated Server Hosts please check out https://github.com/RaylaValdez/NOSMR to implement support for your own Servers.
+    Do not expect immediate support by every Dedicated Server.
+    And big thanks to Gerry of Ravine/RaylaValdez who had the idea and implemented most of the backend for this.
 """.trimIndent()
 
 java {
@@ -32,10 +39,6 @@ kotlin {
     jvm()
     jvmToolchain(25)
     sourceSets {
-        
-        all {
-            languageSettings.enableLanguageFeature("ExplicitBackingFields")
-        }
         commonMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.compose.runtime)
@@ -45,7 +48,9 @@ kotlin {
             implementation(libs.compose.components.resources)
 
             implementation(libs.nucleus.core)
-            implementation(libs.nucleus.window.jni)
+            implementation(libs.nucleus.nucleus.application)
+            implementation(libs.nucleus.decorated.window.tao)
+            implementation(libs.nucleus.window.tao)
             implementation(libs.nucleus.window.material3)
             implementation(libs.nucleus.darkmode)
             implementation(libs.nucleus.taskbar)
@@ -61,11 +66,17 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.coroutinesSwing)
+
+            implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.filekit.core)
             implementation(libs.filekit.dialogs.compose)
+            
+            implementation(libs.coil)
+            implementation(libs.coil.ktor)
+            
             implementation(libs.materialKolor)
 
             implementation(libs.jetbrains.navigation3.ui)
@@ -73,6 +84,9 @@ kotlin {
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
             implementation("org.slf4j:slf4j-simple:2.0.17")
+        }
+        jvmMain.dependencies {
+            implementation(libs.steamworks4j)
         }
     }
 }

@@ -10,8 +10,8 @@ import java.io.File
 object RepoMods {
     private val mutex = Mutex()
 
-    val mods: StateFlow<List<Extension>>
-        field = MutableStateFlow(emptyList())
+    val mods: StateFlow<Map<String,Extension>>
+        field = MutableStateFlow(emptyMap())
 
     val isLoading: StateFlow<Boolean>
         field = MutableStateFlow(false)
@@ -30,13 +30,14 @@ object RepoMods {
                 } else {
                     NetworkClient.fetchManifest() ?: SettingsManager.cachedManifest.value.manifest
                 }
-                mods.value = fetched.distinctBy { it.id }
+                mods.value = fetched.distinctBy { it.id }.associateBy { it.id }
+                ServerBrowser.modHashLookup = buildModHashLookup(mods.value.map { it.value })
             } finally {
                 isLoading.value = false
                 mutex.unlock()
             }
             val updatable = LocalMods.mods.value.filter { it.value.hasUpdate }
-                .mapNotNull { mods.value.find { mod -> mod.id == it.key } }
+                .mapNotNull { mods.value[it.key] }
             if (updatable.isNotEmpty() || SettingsManager.config.value.ignoreNewUpdates) {
                 SettingsManager.criticalInformation.add(
                     Triple(
@@ -80,16 +81,10 @@ object RepoMods {
     }
 
     fun installMod(id: String, version: Version?, processing: MutableSet<String> = mutableSetOf()) {
-        val bepinexFolder = SettingsManager.bepInExFolder
-        if (bepinexFolder == null || !bepinexFolder.exists()) {
-            downloadBepInEx()
-            return
-        }
-
         if (id in processing) return
         processing.add(id)
 
-        val extension = mods.value.find { it.id == id } ?: return
+        val extension = mods.value[id] ?: return
         val targetArtifact = version?.let { v -> extension.artifacts.find { it.version == v } }
             ?: extension.artifacts.maxByOrNull { it.version }
             ?: return
@@ -103,6 +98,32 @@ object RepoMods {
         targetArtifact.dependencies.forEach { installMod(it.id, null, processing) }
         targetArtifact.extends?.let { installMod(it.id, null, processing) }
 
+        installMod(extension.id, targetArtifact.downloadUrl, targetArtifact.hash) { dir ->
+            val metaData = ModMeta(
+                id = id,
+                artifact = targetArtifact,
+            )
+
+            runCatching {
+                File(dir, "meta.json").writeText(json.encodeToString(metaData))
+                LocalMods.refresh()
+                LocalMods.mods.value[id]?.enable()
+            }
+        }
+    }
+    
+
+    fun installMod(id: String, url: String, hash: String? = null, onSuccess: (dir: File) -> Unit = {
+        
+    }) {
+        val bepinexFolder = SettingsManager.bepInExFolder
+        if (bepinexFolder == null || !bepinexFolder.exists()) {
+            downloadBepInEx()
+            return
+        }
+
+
+        val installedMod = LocalMods.mods.value[id]
         installedMod?.disable()
 
         val disabledFolder = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
@@ -111,17 +132,8 @@ object RepoMods {
         if (dir.exists()) dir.deleteRecursively()
         if (!dir.mkdirs()) return
 
-        Installer.installMod(extension.id, targetArtifact.downloadUrl, dir, targetArtifact.hash) {
-            val metaData = ModMeta(
-                id = extension.id,
-                artifact = targetArtifact,
-            )
-
-            runCatching {
-                File(dir, "meta.json").writeText(json.encodeToString(metaData))
-                LocalMods.refresh()
-                LocalMods.mods.value[extension.id]?.enable()
-            }
+        Installer.installMod(id, url, dir, hash) {
+            onSuccess(dir)
         }
     }
 }

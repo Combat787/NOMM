@@ -1,6 +1,6 @@
 package com.combat.nomm
 
-import io.github.kdroidfilter.nucleus.nativehttp.ktor.installNativeSsl
+import dev.nucleusframework.nativehttp.ktor.installNativeSsl
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -62,7 +62,6 @@ object NetworkClient {
             val version = if (versionResponse.status.isSuccess()) {
                 json.decodeFromString<Version>(versionResponse.bodyAsText())
             } else return@runCatching null
-            println(version)
             if (SettingsManager.cachedManifest.value.manifest == version && !SettingsManager.config.value.ignoreManifestVersion) {
                 return@runCatching null
             }

@@ -5,9 +5,9 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
@@ -22,7 +22,6 @@ val version = json.decodeFromString<Version>(BuildKonfig.VERSION)
 
 val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun App() {
     val backStack = rememberNavBackStack(MainNavigation.config, MainNavigation.Search)
@@ -57,7 +56,7 @@ fun App() {
                     entry<MainNavigation.Search> {
                         SearchScreen(
                             onNavigateToMod = { modId ->
-                                if (RepoMods.mods.value.any { it.id == modId }) {
+                                if (RepoMods.mods.value[modId] != null) {
                                     backStack.add(MainNavigation.Mod(modId))
                                 }
                             }
@@ -66,8 +65,32 @@ fun App() {
                     entry<MainNavigation.Libraries> {
                         LibraryScreen(
                             onOpenMod = { targetId ->
-                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                if (RepoMods.mods.value[targetId] != null || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
                                     backStack.add(MainNavigation.Mod(targetId))
+                                }
+                            }
+                        )
+                    }
+                    entry<MainNavigation.Servers> {
+                        ServerBrowserScreen(
+                            onOpenServer = { ip, port ->
+                                backStack.add(MainNavigation.Server(ip, port))
+                            }
+                        )
+                    }
+                    entry<MainNavigation.Server> { nav ->
+                        ServerDetailScreen(
+                            ip = nav.ip,
+                            port = nav.port,
+                            onOpenMod = { targetId ->
+                                if (RepoMods.mods.value[targetId] != null || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                    backStack.add(MainNavigation.Mod(targetId))
+                                }
+                            },
+                            onBack = {
+                                backStack.removeLastOrNull()
+                                if (backStack.isEmpty()) {
+                                    backStack.add(MainNavigation.Servers)
                                 }
                             }
                         )
@@ -79,7 +102,7 @@ fun App() {
                         ModDetailScreen(
                             modId = nav.modName,
                             onOpenMod = { targetId ->
-                                if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                if (RepoMods.mods.value[targetId] != null || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
                                     backStack.add(MainNavigation.Mod(targetId))
                                 }
                             },
