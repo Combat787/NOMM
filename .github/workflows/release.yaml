@@ -26,7 +26,7 @@ jobs:
       - name: Set up Nucleus & Dependencies
         uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@main
         with:
-          jbr-version: '25.0.2b329.66'
+          java-version: '25'
           packaging-tools: 'true'
           flatpak: 'true'
           snap: 'true'
@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-assets-${{ matrix.runner_os }}-amd64
-          path: '**/build/compose/binaries/main-release/**/*'
+          path: 'composeApp/build/compose/binaries/main-release/**/*'
 
   publish:
     name: Publish GitHub Release
@@ -52,6 +52,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Parse Tag & Set Release Environment
         run: |
