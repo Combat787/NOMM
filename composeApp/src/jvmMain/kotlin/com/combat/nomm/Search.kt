@@ -1,18 +1,8 @@
 package com.combat.nomm
 
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +16,7 @@ import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 fun <T> List<T>.sortFilterByQuery(
@@ -129,40 +120,114 @@ fun measureDamerauLevenshtein(source: CharSequence, target: CharSequence, thresh
     return prevRow[tLen]
 }
 
+
 @Composable
 fun rememberFilteredExtensions(allMods: List<Extension>, searchQuery: String): List<Extension> {
-    var filteredMods by remember { mutableStateOf(allMods.sortedByDescending { it.downloadCount }) }
+    return rememberFilteredList(
+        allItems = allMods,
+        searchQuery = searchQuery,
+        onBlankQuery = { items ->
+            items.sortedByDescending { it.downloadCount }
+        },
+        onFilterQuery = { items, query ->
+            items.sortFilterByQuery(query, minSimilarity = 0.3) { ext, q ->
+                val nameScore = fuzzyPowerScore(q, ext.displayName)
+                val idScore = fuzzyPowerScore(q, ext.id)
+                val tagScore = ext.tags.maxOfOrNull { fuzzyPowerScore(q, it) } ?: 0.0
+                val authorScore = ext.authors.maxOfOrNull { fuzzyPowerScore(q, it) } ?: 0.0
+
+                val popularityFactor = log10((ext.downloadCount?.toDouble() ?: 1.0) + 1.0)
+                val weightedScore =
+                    ((nameScore * 5.0) + (idScore * 2.0) + (authorScore * 1.5) + tagScore) * (1.0 + (popularityFactor * 0.1))
+
+                val lengthPenalty = if (ext.displayName.length > q.length * 3) 0.9 else 1.0
+                ext to (weightedScore * lengthPenalty)
+            }
+        }
+    )
+}
+
+
+@Composable
+fun rememberFilteredServers(
+    allServers: List<ServerEntry>,
+    searchQuery: String,
+    showUser: Boolean,
+    showDedicated: Boolean,
+    showPve: Boolean,
+    showPvp: Boolean,
+    sortBy: SortType
+): List<ServerEntry> {
+    return rememberFilteredList(
+        allItems = allServers,
+        searchQuery = searchQuery,
+        showUser,
+        showDedicated,
+        showPve,
+        showPvp,
+        sortBy,
+        onBlankQuery = { items ->
+            var servers = items.filter {
+                ((it.isLobby && showUser) || (!it.isLobby && showDedicated))
+                        && ((it.missionData?.pvpType == "1" && showPvp) || (it.missionData?.pvpType == "2" && showPve))
+
+            }
+
+            servers = when (sortBy) {
+                SortType.PING -> servers.sortedBy { it.info?.ping }
+                SortType.PLAYERS -> servers.sortedByDescending { it.info?.players }
+                SortType.DURATION -> servers.sortedByDescending { it.info?.timeLastPlayed }
+            }
+
+            servers.sortedBy { it.isFavorite }
+
+            servers
+        },
+        onFilterQuery = { items, query ->
+            items.sortFilterByQuery(query, minSimilarity = 0.3) { entry, q ->
+                val nameScore = fuzzyPowerScore(q, entry.displayName)
+                val idScore = entry.info?.map?.let { fuzzyPowerScore(q, it) } ?: 0.0
+
+                val weightedScore = ((nameScore * 5.0) + (idScore * 2.0))
+
+                val lengthPenalty = if (entry.displayName.length > q.length * 3) 0.9 else 1.0
+                entry to (weightedScore * lengthPenalty)
+            }
+        }
+    )
+}
+
+
+@Composable
+fun <T> rememberFilteredList(
+    allItems: List<T>,
+    searchQuery: String,
+    vararg keys: Any?,
+    debounceTime: Duration = 250.milliseconds,
+    onBlankQuery: (List<T>) -> List<T>,
+    onFilterQuery: (List<T>, String) -> List<T>
+): List<T> {
+    var filteredItems by remember { mutableStateOf(onBlankQuery(allItems)) }
     var isInitialLoad by remember { mutableStateOf(true) }
 
-    LaunchedEffect(searchQuery, allMods) {
+    LaunchedEffect(searchQuery, allItems, *keys) {
         if (!isInitialLoad && searchQuery.isNotEmpty()) {
-            delay(250.milliseconds)
+            delay(debounceTime)
         }
 
         val results = withContext(Dispatchers.Default) {
             if (searchQuery.isBlank()) {
-                allMods.sortedByDescending { it.downloadCount }
+                onBlankQuery(allItems)
             } else {
-                allMods.sortFilterByQuery(searchQuery, minSimilarity = 0.3) { ext, query ->
-                    val nameScore = fuzzyPowerScore(query, ext.displayName)
-                    val idScore = fuzzyPowerScore(query, ext.id)
-                    val tagScore = ext.tags.maxOfOrNull { fuzzyPowerScore(query, it) } ?: 0.0
-                    val authorScore = ext.authors.maxOfOrNull { fuzzyPowerScore(query, it) } ?: 0.0
-
-                    val popularityFactor = log10((ext.downloadCount?.toDouble() ?: 1.0) + 1.0)
-                    val weightedScore =
-                        ((nameScore * 5.0) + (idScore * 2.0) + (authorScore * 1.5) + tagScore) * (1.0 + (popularityFactor * 0.1))
-
-                    val lengthPenalty = if (ext.displayName.length > query.length * 3) 0.9 else 1.0
-                    ext to (weightedScore * lengthPenalty)
-                }
+                onFilterQuery(allItems, searchQuery)
             }
         }
-        filteredMods = results
+        filteredItems = results
         isInitialLoad = false
     }
-    return filteredMods
+    return filteredItems
 }
+
 
 @Composable
 fun RowScope.SearchBar(

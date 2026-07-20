@@ -25,7 +25,7 @@ fun LibraryScreen(
 
     val installedExtensions = remember(localMods) {
         localMods.values.map { modMeta ->
-            RepoMods.mods.value.find { it.id == modMeta.id }
+            RepoMods.mods.value[modMeta.id]
                 ?: SettingsManager.cachedManifest.value.manifest.find { it.id == modMeta.id } ?: Extension(
                     id = modMeta.id,
                     displayName = modMeta.id,
@@ -79,20 +79,23 @@ fun LibraryScreen(
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.file_export_24px), null) },
                         colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
                     DropdownMenuItem(
                         text = { Text("Import Modpack") }, onClick = {
                             menuExpanded = false
                             LocalMods.importMods()
                         }, leadingIcon = { Icon(painterResource(Res.drawable.file_open_24px), null) },
-                        colors = itemColors
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
                     DropdownMenuItem(
                         text = { Text("Add from File") }, onClick = {
                             menuExpanded = false
                             LocalMods.addFromFile()
                         }, leadingIcon = { Icon(painterResource(Res.drawable.folder_open_24px), null) },
-                        colors = itemColors
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
                     DropdownMenuItem(
                         text = { Text("Enable all Mods") }, onClick = {
@@ -112,7 +115,8 @@ fun LibraryScreen(
                             }
 
                         },
-                        colors = itemColors
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
                     DropdownMenuItem(
                         text = { Text("Disable all Mods") }, onClick = {
@@ -131,7 +135,28 @@ fun LibraryScreen(
                                 Icon(painterResource(Res.drawable.newsstand_24px), null)
                             }
                         },
-                        colors = itemColors
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Update all Mods") }, onClick = {
+                            menuExpanded = false
+                            LocalMods.updateAll()
+                        }, leadingIcon = {
+                            BadgedBox(
+                                badge = {
+                                    Icon(
+                                        painterResource(Res.drawable.refresh_24px),
+                                        null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            ) {
+                                Icon(painterResource(Res.drawable.newsstand_24px), null)
+                            }
+                        },
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
                 }
             }

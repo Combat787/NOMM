@@ -13,10 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -139,7 +137,8 @@ fun ServerDetailScreen(
         subtitle = run {
             val missionDisplay = missionData?.missionName
                 ?: entry.info?.map?.split(" | ", limit = 2)?.getOrNull(1)?.ifEmpty { null }
-            missionDisplay ?: if (entry.isLobby) "Lobby ${entry.fav.gamePort}" else "${entry.fav.ip}:${entry.fav.gamePort}"
+            missionDisplay
+                ?: if (entry.isLobby) "Lobby ${entry.fav.gamePort}" else "${entry.fav.ip}:${entry.fav.gamePort}"
         },
         details = {
             ServerDetails(entry, missionData)
@@ -154,7 +153,7 @@ fun ServerDetailScreen(
                     ServerDetailsContent(entry, missionData, nommData)
                 }
                 entry<ServerNavigation.Modpack> {
-                    ServerModlistContent(entry, isInstalling, installStatuses, onOpenMod)
+                    ServerModlistContent(entry, onOpenMod)
                 }
             }
         }
@@ -199,6 +198,31 @@ fun ServerDetails(
                     maxLines = 1,
                 )
             }
+            var uptime by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    delay(100.milliseconds)
+                    uptime = effectiveMissionData?.startTime?.let { startTime ->
+                        computeUptime(startTime)
+                    }
+                }
+            }
+
+            if (uptime != null) {
+                VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Icon(painterResource(Res.drawable.pace_24px), null, Modifier.size(20.dp))
+                    Text(
+                        uptime.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                }
+            }
+            
             if (entry.info.ping.isPositive()) {
                 VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
                 Text(
@@ -347,7 +371,7 @@ fun ServerActions(
                     .pointerHoverIcon(PointerIcon.Hand),
             ) {
                 Icon(
-                    painter = painterResource(Res.drawable.computer_24px),
+                    painter = painterResource(Res.drawable.join_24px),
                     contentDescription = "Join Server",
                     modifier = Modifier.size(iconSize),
                     tint = MaterialTheme.colorScheme.primary,
@@ -399,7 +423,7 @@ data class NommServerData(
 
 internal fun parseGameMissionData(rules: Map<String, String>): MissionData? {
     val hasGameKeys = rules.containsKey("mi") || rules.containsKey("ma") ||
-        rules.containsKey("t") || rules.containsKey("s") || rules.containsKey("id")
+            rules.containsKey("t") || rules.containsKey("s") || rules.containsKey("id")
     if (!hasGameKeys) return null
 
     val description = buildString {
@@ -488,8 +512,7 @@ private fun parseNommRules(rules: Map<String, String>): NommServerData? {
         mission = rules["mi"],
     )
 }
-
-private fun computeUptime(startTime: String): String? {
+ fun computeUptime(startTime: String): String? {
     return try {
         val start = java.time.Instant.parse(startTime)
         val now = java.time.Instant.now()
@@ -499,7 +522,7 @@ private fun computeUptime(startTime: String): String? {
         val minutes = (seconds % 3600) / 60
         val secs = seconds % 60
         "$hours:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}"
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 }
@@ -532,30 +555,31 @@ private fun ServerDetailsContent(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                            val missionName = effectiveMissionData?.missionName
-                            val mapName = effectiveMissionData?.mapName
-                                ?: entry.info.map.split(" | ", limit = 2).getOrNull(0)?.ifEmpty { null }
-                                ?: entry.info.map
+                        Spacer(Modifier.height(4.dp))
+                        val missionName = effectiveMissionData?.missionName
+                        val mapName = effectiveMissionData?.mapName
+                            ?: entry.info.map.split(" | ", limit = 2).getOrNull(0)?.ifEmpty { null }
+                            ?: entry.info.map
 
-                            if (missionName != null) {
-                                DetailRow("Mission", missionName)
-                            }
-                            DetailRow("Map", mapName)
-
-                            effectiveMissionData?.description?.let { desc ->
-                                DetailRow("Description", desc)
-                            }
-
-                            val serverType = if (entry.isLobby) "Player Hosted" else "Dedicated"
-                            DetailRow("Server Type", serverType)
-
-                            val pvpType = when (effectiveMissionData?.pvpType) {
-                                "1" -> "PvP"
-                                "2" -> "PvE"
-                                else -> "All"
-                            }
-                            DetailRow("Mission Type", pvpType)
+                        if (missionName != null) {
+                            DetailRow("Mission", missionName)
                         }
+                        DetailRow("Map", mapName)
+
+                        effectiveMissionData?.description?.let { desc ->
+                            DetailRow("Description", desc)
+                        }
+
+                        val serverType = if (entry.isLobby) "Player Hosted" else "Dedicated"
+                        DetailRow("Server Type", serverType)
+
+                        val pvpType = when (effectiveMissionData?.pvpType) {
+                            "1" -> "PvP"
+                            "2" -> "PvE"
+                            else -> "All"
+                        }
+                        DetailRow("Mission Type", pvpType)
+                    }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -576,11 +600,16 @@ private fun ServerDetailsContent(
                     if (entry.info.steamId > 0) DetailRow("Steam ID", entry.info.steamId.toString())
                     if (entry.info.gameDir.isNotEmpty()) DetailRow("Game Dir", entry.info.gameDir)
                     if (entry.info.gameTags.isNotEmpty()) DetailRow("Tags", entry.info.gameTags)
-
-                    effectiveMissionData?.startTime?.let { startTime ->
-                        val uptime = computeUptime(startTime)
-                        if (uptime != null) DetailRow("UpTime", uptime)
+                    var uptime by remember { mutableStateOf<String?>(null) }
+                    LaunchedEffect(Unit) {
+                        while (true) {
+                            delay(100.milliseconds)
+                            uptime = effectiveMissionData?.startTime?.let { startTime ->
+                                computeUptime(startTime)
+                            }
+                        }
                     }
+                    uptime?.let { DetailRow("UpTime", it) }
                     effectiveMissionData?.gameVersion?.let { version ->
                         DetailRow("Game Version", version)
                     }
@@ -612,6 +641,7 @@ private fun ServerDetailsContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Spacer(Modifier.height(4.dp))
             }
             if (isScrollable) {
                 VerticalScrollbar(
@@ -633,8 +663,6 @@ private fun ServerDetailsContent(
 @Composable
 private fun ServerModlistContent(
     entry: ServerEntry,
-    isInstalling: Boolean,
-    installStatuses: Map<String, TaskState>,
     onOpenMod: (String) -> Unit
 ) {
     val state = rememberLazyListState()
@@ -644,7 +672,6 @@ private fun ServerModlistContent(
                     state.firstVisibleItemScrollOffset > 0
         }
     }
-    val repoMods by RepoMods.mods.collectAsState()
 
     Row(
         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
@@ -659,82 +686,54 @@ private fun ServerModlistContent(
 
 
             if (entry.modStatuses.isEmpty()) {
-                item { Text("No Modpack found.", color = MaterialTheme.colorScheme.error) }
+                item { Text("No Modpack found.") }
                 return@LazyColumn
             }
 
-            val groupedStatuses = entry.modStatuses.groupBy { it.status }
-
-            item { DetailListHeader("Matched", MaterialTheme.colorScheme.onSurface) }
-            groupedStatuses[ModStatus.MATCH]?.let { statuses ->
-                items(statuses) { status ->
-                    val mod = repoMods.find { it.id == status.modRef.id }
-                    DetailListItemCard(
-                        title = mod?.displayName ?: status.modRef.id,
-                        description = status.serverVersion?.toString() ?: "",
-                        onClick = if (mod != null) {
-                            { onOpenMod.invoke(mod.id) }
-                        } else null,
-                        error = false
-                    )
+            item { DetailListHeader("Mods", MaterialTheme.colorScheme.onSurface) }
+            val (unidentifiedMods, identifiedMods) =
+                entry.modStatuses.partition { listOf(ModStatus.NOT_IN_REPO, ModStatus.UNKNOWN).contains(it.status) }
+            items(identifiedMods) { status ->
+                val mod = RepoMods.mods.collectAsState().value[status.modRef.id]
+                val error = status.status != ModStatus.MATCH
+                DetailListItemCard(
+                    title = mod?.displayName ?: status.modRef.id,
+                    description =
+                        if (status.status == ModStatus.VERSION_MISMATCH)
+                            status.localVersion.toString()
+                        else
+                            status.serverVersion.toString(),
+                    onClick = if (mod != null) {
+                        { onOpenMod.invoke(mod.id) }
+                    } else null,
+                    error = error,
+                    secondaryDescription =
+                        if (status.status == ModStatus.VERSION_MISMATCH)
+                            status.serverVersion.toString()
+                        else null
+                ) {
+                    if (mod == null) return@DetailListItemCard
+                    val installStatuses by Installer.installStatuses.collectAsState()
+                    val installedMods by LocalMods.mods.collectAsState()
+                    val taskState = installStatuses[mod.id]
+                    val modMeta = installedMods[mod.id]
+                    ModActions(taskState, modMeta, mod, 40.dp, 24.dp, version = status.serverVersion, error = error)
                 }
-            } ?: run {
+            }
+            if (identifiedMods.isEmpty()) {
                 item { DetailListEmptySection("None") }
             }
-
-            item { DetailListHeader("Not Installed", MaterialTheme.colorScheme.error) }
-            groupedStatuses[ModStatus.NEED_INSTALL]?.let { statuses ->
-                items(statuses) { status ->
-                    val mod = repoMods.find { it.id == status.modRef.id }
+            if (unidentifiedMods.isNotEmpty()) {
+                item { DetailListHeader("Mods not in Manifest", MaterialTheme.colorScheme.error) }
+                items(unidentifiedMods) { status ->
                     DetailListItemCard(
-                        title = mod?.displayName ?: status.modRef.id,
-                        description = status.serverVersion?.toString() ?: "",
-                        onClick = if (mod != null) {
-                            { onOpenMod.invoke(mod.id) }
-                        } else null,
-                        error = true
-                    )
-                }
-            } ?: run {
-                item { DetailListEmptySection("None") }
-            }
-
-            item { DetailListHeader("Not In Manifest", MaterialTheme.colorScheme.error) }
-            groupedStatuses[ModStatus.NOT_IN_REPO]?.let { statuses ->
-                items(statuses) { status ->
-                    val mod = repoMods.find { it.id == status.modRef.id }
-                    DetailListItemCard(
-                        title = mod?.displayName ?: status.modRef.id,
+                        title = status.modRef.id,
                         description = status.serverVersion?.toString() ?: "Local mod",
-                        onClick = if (mod != null) {
-                            { onOpenMod.invoke(mod.id) }
-                        } else null,
-                        error = true
-                    )
-                }
-            } ?: run {
-                item { DetailListEmptySection("None") }
-            }
-
-            item { DetailListHeader("Version Mismatch", MaterialTheme.colorScheme.error) }
-            groupedStatuses[ModStatus.VERSION_MISMATCH]?.let { statuses ->
-                items(statuses) { status ->
-                    val mod = repoMods.find { it.id == status.modRef.id }
-                    DetailListItemCard(
-                        title = mod?.displayName ?: status.modRef.id,
-                        description = status.localVersion?.toString() ?: "",
-                        onClick = if (mod != null) {
-                            { onOpenMod.invoke(mod.id) }
-                        } else null,
+                        onClick = null,
                         error = true,
-                        secondaryDescription = status.serverVersion?.toString() ?: ""
-                    )
+                    ) {}
                 }
-            } ?: run {
-                item { DetailListEmptySection("None") }
             }
-
-            
         }
 
         if (isScrollable) {
@@ -759,7 +758,8 @@ private fun DetailRow(label: String, value: String) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMediumEmphasized)
     }
 }
+

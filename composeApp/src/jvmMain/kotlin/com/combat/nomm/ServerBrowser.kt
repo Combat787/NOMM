@@ -3,16 +3,11 @@ package com.combat.nomm
 import io.github.vinceglb.filekit.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -55,31 +50,9 @@ data class ServerEntry(
     val isFavorite: Boolean
         get() = ServerFavorites.isFavorited(fav.ip, fav.gamePort)
 
-    val modStatusSummary: ModStatusSummary
-        get() {
-            if (modlist == null) return ModStatusSummary.UNKNOWN
-            val statuses = modStatuses.map { it.status }
-            return when {
-                statuses.isEmpty() -> ModStatusSummary.UNKNOWN
-                statuses.all { it == ModStatus.MATCH } -> ModStatusSummary.READY
-                statuses.any { it == ModStatus.NEED_INSTALL } || statuses.any { it == ModStatus.VERSION_MISMATCH } -> ModStatusSummary.CAN_FIX
-                statuses.any { it == ModStatus.NOT_IN_REPO } -> ModStatusSummary.PARTIAL
-                else -> ModStatusSummary.UNKNOWN
-            }
-        }
-
     val modsToInstall: List<ServerModStatus>
         get() = modStatuses.filter { it.status == ModStatus.NEED_INSTALL || it.status == ModStatus.VERSION_MISMATCH }
 
-    val modsNotInRepo: List<ServerModStatus>
-        get() = modStatuses.filter { it.status == ModStatus.NOT_IN_REPO }
-}
-
-enum class ModStatusSummary {
-    READY,
-    CAN_FIX,
-    PARTIAL,
-    UNKNOWN,
 }
 
 object ServerFavorites {
@@ -435,7 +408,7 @@ object ServerBrowser {
 
         return modlist.map { ref ->
             val local = localMods[ref.id]
-            val repo = repoMods.find { it.id == ref.id }
+            val repo = repoMods[ref.id]
 
             when {
                 local != null && local.enabled == true -> {

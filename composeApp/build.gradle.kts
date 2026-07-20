@@ -22,7 +22,9 @@ plugins {
 val appVersion = "5.0.0"
 
 val changelog = """
-    Fixed exporting/importing Modpacks with Local Mods that are not a single File.
+    Added a Server List where you can directly join other Servers and if the Server supports it or the host is using NOMM can autoinstall Mods.
+    For Dedicated Server Hosts please check out https://github.com/RaylaValdez/NOSMR to implement support for your own Servers.
+    And big thanks to Gerry of Ravine/RaylaValdez who had the idea and implemented most of the backend for this.
 """.trimIndent()
 
 java {
@@ -63,11 +65,17 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.coroutinesSwing)
+
+            implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.filekit.core)
             implementation(libs.filekit.dialogs.compose)
+            
+            implementation(libs.coil)
+            implementation(libs.coil.ktor)
+            
             implementation(libs.materialKolor)
 
             implementation(libs.jetbrains.navigation3.ui)

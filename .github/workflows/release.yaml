@@ -1,4 +1,5 @@
 name: Release
+
 on:
   push:
     tags: ['*']
@@ -8,23 +9,80 @@ permissions:
 
 jobs:
   build:
+    name: Build (${{ matrix.runner_os }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest,    arch: amd64 }
-          - { os: windows-latest,   arch: amd64 }
+          - os: ubuntu-latest
+            runner_os: Linux
+          - os: windows-latest
+            runner_os: Windows
     runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
-      - uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@main
+
+      - name: Set up Nucleus & Dependencies
+        uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@main
         with:
           jbr-version: '25.0.2b329.66'
           packaging-tools: 'true'
           flatpak: 'true'
           snap: 'true'
-      - run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
-      - uses: actions/upload-artifact@v4
+
+      - name: Build Installer
+        run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: release-assets-${{ runner.os }}-${{ matrix.arch }}
+          name: release-assets-${{ matrix.runner_os }}-amd64
           path: build/compose/binaries/main/**/*
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Parse Tag & Set Release Environment
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          VERSION="${TAG_NAME#v}"
+          
+          echo "TAG=${TAG_NAME}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          
+          # Mark alpha/beta tags as pre-releases
+          if [[ "$TAG_NAME" == *"-alpha"* ]]; then
+            echo "CHANNEL=alpha" >> $GITHUB_ENV
+            echo "RELEASE_TYPE=prerelease" >> $GITHUB_ENV
+          elif [[ "$TAG_NAME" == *"-beta"* ]]; then
+            echo "CHANNEL=beta" >> $GITHUB_ENV
+            echo "RELEASE_TYPE=prerelease" >> $GITHUB_ENV
+          else
+            echo "CHANNEL=latest" >> $GITHUB_ENV
+            echo "RELEASE_TYPE=release" >> $GITHUB_ENV
+          fi
+
+      - name: Generate Auto-Update Metadata
+        uses: NucleusFramework/Nucleus/.github/actions/generate-update-yml@main
+        with:
+          artifacts-path: artifacts
+          version: ${{ env.VERSION }}
+          channel: ${{ env.CHANNEL }}
+
+      - name: Publish Release to GitHub
+        uses: NucleusFramework/Nucleus/.github/actions/publish-release@main
+        with:
+          artifacts-path: artifacts
+          tag: ${{ env.TAG }}
+          release-type: ${{ env.RELEASE_TYPE }}

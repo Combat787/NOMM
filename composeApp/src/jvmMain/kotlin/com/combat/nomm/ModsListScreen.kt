@@ -1,6 +1,5 @@
 package com.combat.nomm
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,7 +28,7 @@ fun SearchScreen(
     val allMods by RepoMods.mods.collectAsState()
     val isLoading by RepoMods.isLoading.collectAsState()
 
-    val filteredMods = rememberFilteredExtensions(allMods.filter { it.id != "NOSMR" }, searchQuery)
+    val filteredMods = rememberFilteredExtensions(allMods.minus("NOSMR").values.toList(), searchQuery)
 
 
 

@@ -5,13 +5,13 @@ kotlin = "2.4.0"
 kotlinx-coroutines = "1.11.0"
 ktor = "3.5.0"
 material3 = "1.11.0-alpha07"
-nucleus = "2.0.7"
+nucleus = "2.1.3"
 
 kotlinx-serialization = "1.11.0"
 kotlinx-datetime = "0.8.0"
 
 filekit = "0.14.2"
-
+coil = "3.5.0"
 
 materialKolor = "5.0.0-alpha07"
 steamworks4j = "1.10.0"
@@ -37,7 +37,8 @@ kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs = { module = "io.github.vinceglb:filekit-dialogs", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
-
+coil = { module = "io.coil-kt.coil3:coil-compose" , version.ref = "coil"}
+coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3" , version.ref = "coil"}
 
 
 materialKolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }

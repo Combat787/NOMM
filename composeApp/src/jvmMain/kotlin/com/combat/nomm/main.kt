@@ -36,6 +36,7 @@ import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
 import java.io.File
 import java.net.URI
+import kotlin.io.path.toPath
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -44,108 +45,118 @@ val LocalWindowState = compositionLocalOf<WindowState> { error("No WindowState p
 
 
 @OptIn(FlowPreview::class, ExperimentalComposeUiApi::class)
-fun main(args: Array<String>) = nucleusApplication(args, backend = NucleusBackend.Tao) {
-    aotTraining(1.minutes) {}
-
-    onDeepLink {
-        
-    }
-
-    LaunchedEffect(Unit) {
-        val initialFile = args.firstOrNull()
-        if (initialFile != null && (initialFile.endsWith("nomm.json") || initialFile.endsWith("nommpack"))) {
-            LocalMods.importMods(PlatformFile(initialFile))
-        }
-        refresh()
-    }
-
-    LaunchedEffect(Unit) {
-        initializeSevenZipNative()
-    }
-    FileKit.init("NOMM")
-    val configuration by SettingsManager.config
-
-
-    val useDarkTheme = when (
-        configuration.theme) {
-        Theme.DARK -> true
-        Theme.LIGHT -> false
-        else -> isSystemInDarkMode()
-    }
-    val windowState = rememberWindowState(placement = SettingsManager.config.value.placement)
-
-    NOMMTheme(
-        configuration.themeColor, useDarkTheme,
-        configuration.paletteStyle,
-        configuration.contrast
+fun main(args: Array<String>) {
+    val formattedArgs = args.map { arg ->
+        val file = File(arg)
+        if (file.exists()) "file:///" + file.toURI().toString().removePrefix("file:/") else arg
+    }.toTypedArray()
+    nucleusApplication(
+        args = formattedArgs,
+        backend = NucleusBackend.Tao,
+        enableSingleInstance = true
     ) {
-        MaterialDecoratedWindow(
-            onCloseRequest = {
-                SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = windowState.placement))
-                runBlocking {
-                    SettingsManager.saveConfig()
-                    SettingsManager.saveCachedManifest()
-                }
-                runBlocking {
-                    SteamDiscovery.shutdown()
-                }
-                exitApplication()
-            },
-            title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",
-            icon = painterResource(Res.drawable.iconpng),
-            minimumSize = DpSize(800.dp, 600.dp),
-            state = windowState,
+        aotTraining(1.minutes) {}
+
+        onDeepLink { uri ->
+            println(uri)
+            LocalMods.importMods(
+                PlatformFile(uri.toPath().toFile()))
+        }
+
+        LaunchedEffect(Unit) {
+            initializeSevenZipNative()
+            val initialFile = args.firstOrNull()
+            if (initialFile != null && (initialFile.endsWith("nomm.json") || initialFile.endsWith("nommpack"))) {
+                LocalMods.importMods(PlatformFile(initialFile))
+            }
+            refresh()
+        }
+
+        FileKit.init("NOMM")
+        val configuration by SettingsManager.config
+
+
+        val useDarkTheme = when (
+            configuration.theme) {
+            Theme.DARK -> true
+            Theme.LIGHT -> false
+            else -> isSystemInDarkMode()
+        }
+        val windowState = rememberWindowState(placement = SettingsManager.config.value.placement)
+
+        NOMMTheme(
+            configuration.themeColor, useDarkTheme,
+            configuration.paletteStyle,
+            configuration.contrast
         ) {
-            LaunchedEffect(windowState) {
-                snapshotFlow { windowState }
-                    .distinctUntilChanged()
-                    .debounce(2.seconds)
-                    .collect { state ->
-                        SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = state.placement))
+            MaterialDecoratedWindow(
+                onCloseRequest = {
+                    SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = windowState.placement))
+                    runBlocking {
+                        SettingsManager.saveConfig()
+                        SettingsManager.saveCachedManifest()
                     }
-            }
-            MaterialTitleBar(
-                backgroundContent = {
-                    Column {
-                        Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainer).fillMaxSize())
-                        HorizontalDivider(modifier = Modifier.fillMaxWidth(), thickness = Dp.Hairline)
+                    runBlocking {
+                        SteamDiscovery.shutdown()
                     }
-                }
+                    exitApplication()
+                },
+                title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",
+                icon = painterResource(Res.drawable.iconpng),
+                minimumSize = DpSize(800.dp, 600.dp),
+                state = windowState,
             ) {
-                Icon(
-                    painter = painterResource(Res.drawable.iconpng),
-                    contentDescription = null,
-                    modifier = Modifier.padding(start = 8.dp).size(24.dp).align(Alignment.CenterHorizontally),
-                    tint = Color.Unspecified
-                )
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    title,
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            CompositionLocalProvider(LocalWindowState provides windowState) {
-
-
-                Surface(
-                    modifier = Modifier.fillMaxSize()
-                        .dragAndDropTarget({ it.dragData() is DragData.FilesList }, remember {
-                            object : DragAndDropTarget {
-                                override fun onDrop(event: DragAndDropEvent): Boolean {
-                                    val data = event.dragData()
-                                    if (data is DragData.FilesList) {
-                                        LocalMods.addFilesToPlugins(
-                                            data.readFiles().map { file -> File(URI(file)) })
-                                        return true
-                                    }
-                                    return false
-                                }
-                            }
-                        })
+                LaunchedEffect(windowState) {
+                    snapshotFlow { windowState }
+                        .distinctUntilChanged()
+                        .debounce(2.seconds)
+                        .collect { state ->
+                            SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = state.placement))
+                        }
+                }
+                MaterialTitleBar(
+                    backgroundContent = {
+                        Column {
+                            Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainer).fillMaxSize())
+                            HorizontalDivider(modifier = Modifier.fillMaxWidth(), thickness = Dp.Hairline)
+                        }
+                    }
                 ) {
-                    App()
+                    Icon(
+                        painter = painterResource(Res.drawable.iconpng),
+                        contentDescription = null,
+                        modifier = Modifier.padding(start = 8.dp).size(24.dp).align(Alignment.CenterHorizontally),
+                        tint = Color.Unspecified
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        title,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+
+                CompositionLocalProvider(LocalWindowState provides windowState) {
+
+
+                    Surface(
+                        modifier = Modifier.fillMaxSize()
+                            .dragAndDropTarget({ it.dragData() is DragData.FilesList }, remember {
+                                object : DragAndDropTarget {
+                                    override fun onDrop(event: DragAndDropEvent): Boolean {
+                                        val data = event.dragData()
+                                        if (data is DragData.FilesList) {
+                                            LocalMods.addFilesToPlugins(
+                                                data.readFiles().map { file -> File(URI(file)) })
+                                            return true
+                                        }
+                                        return false
+                                    }
+                                }
+                            })
+                    ) {
+                        App()
+                    }
                 }
             }
         }
