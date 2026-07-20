@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Nucleus & Dependencies
         uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@main
@@ -35,10 +35,10 @@ jobs:
         run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-${{ matrix.runner_os }}-amd64
-          path: build/compose/binaries/main/**/*
+          path: '**/build/compose/binaries/main-release/**/*'
 
   publish:
     name: Publish GitHub Release
@@ -46,10 +46,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -82,6 +82,8 @@ jobs:
 
       - name: Publish Release to GitHub
         uses: NucleusFramework/Nucleus/.github/actions/publish-release@main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           artifacts-path: artifacts
           tag: ${{ env.TAG }}

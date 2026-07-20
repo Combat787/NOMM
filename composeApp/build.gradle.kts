@@ -134,7 +134,7 @@ nucleus.application {
         artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
         
         cleanupNativeLibs = true
-        enableAotCache = false
+        enableAotCache = true
         homepage = "https://github.com/Combat787/NOMM"
         
         compressionLevel = CompressionLevel.Normal
