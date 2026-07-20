@@ -38,7 +38,15 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-assets-${{ matrix.runner_os }}-amd64
-          path: 'composeApp/build/compose/binaries/main-release/**/*'
+          path: |
+            composeApp/build/compose/binaries/main-release/*/*.msi
+            composeApp/build/compose/binaries/main-release/*/*.exe
+            composeApp/build/compose/binaries/main-release/*/*.zip
+            composeApp/build/compose/binaries/main-release/*/*.deb
+            composeApp/build/compose/binaries/main-release/*/*.rpm
+            composeApp/build/compose/binaries/main-release/*/*.AppImage
+            composeApp/build/compose/binaries/main-release/*/*.flatpak
+            composeApp/build/compose/binaries/main-release/*/*.snap
 
   publish:
     name: Publish GitHub Release
@@ -52,7 +60,6 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
-          merge-multiple: true
 
       - name: Parse Tag & Set Release Environment
         run: |
