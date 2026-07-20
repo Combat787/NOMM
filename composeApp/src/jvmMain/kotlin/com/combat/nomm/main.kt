@@ -55,7 +55,7 @@ fun main(args: Array<String>) {
         backend = NucleusBackend.Tao,
         enableSingleInstance = true
     ) {
-        aotTraining(1.minutes) {}
+        aotTraining {}
 
         onDeepLink { uri ->
             println(uri)
