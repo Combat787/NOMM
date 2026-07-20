@@ -2,7 +2,6 @@ package com.combat.nomm
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,6 +59,11 @@ fun ServerBrowserScreen(
             }
         }
     }
+    
+    
+    LaunchedEffect(sortBy) {
+        ServerBrowser.refreshAll()
+    }
 
     val localMods by LocalMods.mods.collectAsState()
     LaunchedEffect(localMods) {
@@ -74,7 +78,7 @@ fun ServerBrowserScreen(
 
             val contentColor = MaterialTheme.colorScheme.onSecondary
             val itemColors =
-                MenuDefaults.itemColors(textColor = contentColor, leadingIconColor = contentColor)
+                MenuDefaults.itemColors(textColor = contentColor, leadingIconColor = contentColor, trailingIconColor = contentColor)
             Box(contentAlignment = Alignment.TopCenter) {
                 Button(
                     onClick = { sortByExpanded = true },
@@ -85,25 +89,9 @@ fun ServerBrowserScreen(
                     ),
                     shape = MaterialTheme.shapes.small,
                 ) {
-                    BadgedBox(
-                        badge = {
-                            Icon(
-                                painterResource(
-                                    when (sortBy) {
-                                        SortType.PING -> Res.drawable.network_ping_24px
-                                        SortType.PLAYERS -> Res.drawable.group_24px
-                                        SortType.DURATION -> Res.drawable.pace_24px
-                                    }
-                                ), null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    ) {
-                        Icon(
-                            painterResource(Res.drawable.filter_list_24px),
-                            null,
-                        )
-                    }
+                    Icon(
+                        painterResource(Res.drawable.filter_list_24px), null
+                    )
                 }
 
                 DropdownMenu(
@@ -118,6 +106,9 @@ fun ServerBrowserScreen(
                             sortByExpanded = false
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.network_ping_24px), null) },
+                        trailingIcon = if (sortBy == SortType.PING) {
+                            { Icon(painterResource(Res.drawable.check_24px), null) }
+                        }else null,
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
@@ -128,6 +119,9 @@ fun ServerBrowserScreen(
                             sortByExpanded = false
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.group_24px), null) },
+                        trailingIcon = if (sortBy == SortType.PLAYERS) {
+                            { Icon(painterResource(Res.drawable.check_24px), null) }
+                        }else null,
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
@@ -138,6 +132,9 @@ fun ServerBrowserScreen(
                             sortByExpanded = false
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.pace_24px), null) },
+                        trailingIcon = if (sortBy == SortType.DURATION) {
+                            { Icon(painterResource(Res.drawable.check_24px), null) }
+                        }else null,
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
