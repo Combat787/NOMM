@@ -180,8 +180,6 @@ fun rememberFilteredServers(
             }
 
             servers.sortedBy { it.isFavorite }
-
-            servers
         },
         onFilterQuery = { items, query ->
             items.sortFilterByQuery(query, minSimilarity = 0.3) { entry, q ->

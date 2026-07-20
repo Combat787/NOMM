@@ -15,7 +15,7 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.0.1"
+val appVersion = "5.0.2"
 
 val changelog = """
     Added a Server List where you can directly join other Servers and if the Server supports it or the host is using NOMM can autoinstall Mods.
