@@ -18,32 +18,17 @@ import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
-enum class SortType {
-    PING,
-    PLAYERS,
-    DURATION
-}
-
 @Composable
 fun ServerBrowserScreen(
     onOpenServer: (String, Long) -> Unit,
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-
-    var userServer by remember { mutableStateOf(true) }
-    var dedicatedServer by remember { mutableStateOf(true) }
-    var pveServer by remember { mutableStateOf(true) }
-    var pvpServer by remember { mutableStateOf(true) }
     var filterExpanded by remember { mutableStateOf(false) }
-
-    var sortBy by remember { mutableStateOf(SortType.PING) }
     var sortByExpanded by remember { mutableStateOf(false) }
-
 
     val serverList by ServerBrowser.servers.collectAsState()
 
     val filteredServers =
-        rememberFilteredServers(serverList, searchQuery, userServer, dedicatedServer, pveServer, pvpServer, sortBy)
+        rememberFilteredServers(serverList, ServerBrowser.searchQuery, ServerBrowser.showUser, ServerBrowser.showDedicated, ServerBrowser.showPve, ServerBrowser.showPvp, ServerBrowser.showFavoritesOnly, ServerBrowser.sortBy)
 
     LaunchedEffect(Unit) {
         if (ServerBrowser.servers.value.isEmpty()) {
@@ -61,7 +46,7 @@ fun ServerBrowserScreen(
     }
     
     
-    LaunchedEffect(sortBy) {
+    LaunchedEffect(ServerBrowser.sortBy) {
         ServerBrowser.refreshAll()
     }
 
@@ -71,8 +56,8 @@ fun ServerBrowserScreen(
     }
 
     ListScreen(
-        query = searchQuery,
-        onQueryChange = { searchQuery = it },
+        query = ServerBrowser.searchQuery,
+        onQueryChange = { ServerBrowser.searchQuery = it },
         placeholder = "Search servers...",
         buttons = {
 
@@ -102,11 +87,11 @@ fun ServerBrowserScreen(
                     DropdownMenuItem(
                         text = { Text("Ping") },
                         onClick = {
-                            sortBy = SortType.PING
+                            ServerBrowser.sortBy = SortType.PING
                             sortByExpanded = false
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.network_ping_24px), null) },
-                        trailingIcon = if (sortBy == SortType.PING) {
+                        trailingIcon = if (ServerBrowser.sortBy == SortType.PING) {
                             { Icon(painterResource(Res.drawable.check_24px), null) }
                         }else null,
                         colors = itemColors,
@@ -115,11 +100,11 @@ fun ServerBrowserScreen(
                     DropdownMenuItem(
                         text = { Text("Players") },
                         onClick = {
-                            sortBy = SortType.PLAYERS
+                            ServerBrowser.sortBy = SortType.PLAYERS
                             sortByExpanded = false
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.group_24px), null) },
-                        trailingIcon = if (sortBy == SortType.PLAYERS) {
+                        trailingIcon = if (ServerBrowser.sortBy == SortType.PLAYERS) {
                             { Icon(painterResource(Res.drawable.check_24px), null) }
                         }else null,
                         colors = itemColors,
@@ -128,11 +113,11 @@ fun ServerBrowserScreen(
                     DropdownMenuItem(
                         text = { Text("Duration") },
                         onClick = {
-                            sortBy = SortType.DURATION
+                            ServerBrowser.sortBy = SortType.DURATION
                             sortByExpanded = false
                         },
                         leadingIcon = { Icon(painterResource(Res.drawable.pace_24px), null) },
-                        trailingIcon = if (sortBy == SortType.DURATION) {
+                        trailingIcon = if (ServerBrowser.sortBy == SortType.DURATION) {
                             { Icon(painterResource(Res.drawable.check_24px), null) }
                         }else null,
                         colors = itemColors,
@@ -164,13 +149,27 @@ fun ServerBrowserScreen(
                     containerColor = MaterialTheme.colorScheme.secondary,
                     expanded = filterExpanded, onDismissRequest = { filterExpanded = false }) {
                     DropdownMenuItem(
-                        text = { Text("User") },
+                        text = { Text("Favorites") },
                         onClick = {
-                            userServer = !userServer
+                            ServerBrowser.showFavoritesOnly = !ServerBrowser.showFavoritesOnly
                         },
                         leadingIcon = {
                             Icon(
-                                painterResource(if (userServer) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
+                                painterResource(if (ServerBrowser.showFavoritesOnly) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
+                                null
+                            )
+                        },
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
+                    )
+                    DropdownMenuItem(
+                        text = { Text("User") },
+                        onClick = {
+                            ServerBrowser.showUser = !ServerBrowser.showUser
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(if (ServerBrowser.showUser) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
                                 null
                             )
                         },
@@ -180,11 +179,11 @@ fun ServerBrowserScreen(
                     DropdownMenuItem(
                         text = { Text("Dedicated") },
                         onClick = {
-                            dedicatedServer = !dedicatedServer
+                            ServerBrowser.showDedicated = !ServerBrowser.showDedicated
                         },
                         leadingIcon = {
                             Icon(
-                                painterResource(if (dedicatedServer) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
+                                painterResource(if (ServerBrowser.showDedicated) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
                                 null
                             )
                         },
@@ -194,11 +193,11 @@ fun ServerBrowserScreen(
                     DropdownMenuItem(
                         text = { Text("PvE") },
                         onClick = {
-                            pveServer = !pveServer
+                            ServerBrowser.showPve = !ServerBrowser.showPve
                         },
                         leadingIcon = {
                             Icon(
-                                painterResource(if (pveServer) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
+                                painterResource(if (ServerBrowser.showPve) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
                                 null
                             )
                         },
@@ -208,11 +207,11 @@ fun ServerBrowserScreen(
                     DropdownMenuItem(
                         text = { Text("PvP") },
                         onClick = {
-                            pvpServer = !pvpServer
+                            ServerBrowser.showPvp = !ServerBrowser.showPvp
                         },
                         leadingIcon = {
                             Icon(
-                                painterResource(if (pvpServer) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
+                                painterResource(if (ServerBrowser.showPvp) Res.drawable.check_box_24px else Res.drawable.check_box_outline_blank_24px),
                                 null
                             )
                         },

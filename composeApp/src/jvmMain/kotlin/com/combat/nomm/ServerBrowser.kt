@@ -1,5 +1,8 @@
 package com.combat.nomm
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import io.github.vinceglb.filekit.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -130,6 +133,12 @@ fun mergeMissionData(base: MissionData?, incoming: MissionData?): MissionData? {
     )
 }
 
+enum class SortType {
+    PING,
+    PLAYERS,
+    DURATION
+}
+
 object ServerBrowser {
     private const val LOBBY_TAG = "Lobby"
     internal const val LOBBY_IP = "lobby"
@@ -171,6 +180,14 @@ object ServerBrowser {
         field = MutableStateFlow(emptySet())
 
     var modHashLookup: Map<String, PackageReference> = emptyMap()
+
+    var searchQuery: String by mutableStateOf("")
+    var showUser: Boolean by mutableStateOf(true)
+    var showDedicated: Boolean by mutableStateOf(true)
+    var showPve: Boolean by mutableStateOf(true)
+    var showPvp: Boolean by mutableStateOf(true)
+    var showFavoritesOnly: Boolean by mutableStateOf(false)
+    var sortBy: SortType by mutableStateOf(SortType.PING)
 
     fun load() {
         discoverServers()

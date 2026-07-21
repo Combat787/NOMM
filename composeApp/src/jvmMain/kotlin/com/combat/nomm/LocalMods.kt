@@ -6,8 +6,9 @@ import io.github.vinceglb.filekit.utils.toKotlinxIoPath
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
@@ -34,6 +35,8 @@ object LocalMods {
         field = MutableStateFlow(emptyMap())
 
     val protectedIds = setOf("NOMM-Integration", "NOSMR")
+
+    internal var nosmrExportJob: Job? = null
 
 
     fun exportMods() {
@@ -173,6 +176,7 @@ object LocalMods {
 
                 val importedIds = imported?.map { it.id }
                 mods.value.forEach { (_, meta) ->
+                    if (meta.id in LocalMods.protectedIds) return@forEach
                     if (importedIds?.contains(meta.id) == true) {
                         meta.enable()
                     } else {
@@ -282,10 +286,10 @@ object LocalMods {
         loadInstalledModMetas()
         RepoMods.fetchManifest()
 
-        val ver = Version(1, 2, 3)
+        val ver = Version(1, 2, 5)
         val id = "NOSMR"
-        val downloadUrl = "https://github.com/RaylaValdez/NOSMR/releases/download/v1.2.3/NOSMR.dll"
-        val hash = "sha256:8549f1fdde25766db773e1bfad442cb47b871cbcd6543bfcc7cd3542a188c22c"
+        val downloadUrl = "https://github.com/RaylaValdez/NOSMR/releases/download/v1.2.5/NOSMR.dll"
+        val hash = "sha256:8248fc1bf5d02ddbc38d2c8aafddca68a2669bdc2dc10c706d1206585319dccd"
 
 
         val installedMod = mods.value[id]
@@ -328,6 +332,7 @@ object LocalMods {
 
     fun disableAll() {
         mods.value.forEach { (_, meta) ->
+            if (meta.id in LocalMods.protectedIds) return@forEach
             meta.disable()
         }
     }
@@ -438,10 +443,12 @@ data class ModMeta(
     }
 
     fun giveNOSMRnommpack() {
-        val file = LocalMods.mods.value["NOSMR"]?.file?.toKotlinxIoPath()?.let {
-            PlatformFile(it)
-        } ?: return
-        runBlocking {
+        LocalMods.nosmrExportJob?.cancel()
+        LocalMods.nosmrExportJob = scope.launch {
+            delay(500)
+            val file = LocalMods.mods.value["NOSMR"]?.file?.toKotlinxIoPath()?.let {
+                PlatformFile(it)
+            } ?: return@launch
             val modpacks = file / "modpacks"
             modpacks.createDirectories()
             exportMods(modpacks / "current.nommpack")
@@ -481,7 +488,6 @@ data class ModMeta(
         val currentSelf = LocalMods.mods.value[id] ?: this
         val currentFile = currentSelf.file ?: return
         if (currentSelf.enabled == false || !currentFile.exists()) return
-        if (id in LocalMods.protectedIds) return
 
         LocalMods.mods.value.values.forEach { other ->
             if (other.artifact?.extends?.id == id && other.enabled == true) {
@@ -504,7 +510,6 @@ data class ModMeta(
 
     fun update() {
         RepoMods.installMod(id, null)
-        giveNOSMRnommpack()
     }
 }
 

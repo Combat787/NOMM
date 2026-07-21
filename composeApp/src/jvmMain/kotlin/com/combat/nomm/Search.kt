@@ -156,6 +156,7 @@ fun rememberFilteredServers(
     showDedicated: Boolean,
     showPve: Boolean,
     showPvp: Boolean,
+    showFavoritesOnly: Boolean,
     sortBy: SortType
 ): List<ServerEntry> {
     return rememberFilteredList(
@@ -165,12 +166,17 @@ fun rememberFilteredServers(
         showDedicated,
         showPve,
         showPvp,
+        showFavoritesOnly,
         sortBy,
         onBlankQuery = { items ->
             var servers = items.filter {
                 ((it.isLobby && showUser) || (!it.isLobby && showDedicated))
                         && ((it.missionData?.pvpType == "1" && showPvp) || (it.missionData?.pvpType == "2" && showPve))
 
+            }
+
+            if (showFavoritesOnly) {
+                servers = servers.filter { it.isFavorite }
             }
 
             servers = when (sortBy) {
