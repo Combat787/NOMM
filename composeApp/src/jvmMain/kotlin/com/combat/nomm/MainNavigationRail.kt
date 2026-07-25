@@ -123,9 +123,12 @@ fun MainNavigationRail(
                 val state = LocalWindowState.current
                 FloatingActionButton(
                     onClick = {
+                        // Steam discovery can be waiting on its worker while holding its mutex.
+                        // Launch Windows first so worker shutdown cannot block the button.
+                        if (!launchWindowsSteamUri()) {
+                            launchNuclearOption()
+                        }
                         state.isMinimized = true
-                        launchNuclearOption()
-
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -144,6 +147,22 @@ fun MainNavigationRail(
 }
 
 private val launching = AtomicBoolean(false)
+
+private fun launchWindowsSteamUri(): Boolean {
+    if (!System.getProperty("os.name").lowercase().contains("win")) return false
+
+    return try {
+        val steamUri = "steam://rungameid/2168680"
+        ProcessBuilder(
+            "cmd.exe", "/d", "/s", "/c",
+            "start \"\" \"$steamUri\""
+        ).start()
+        true
+    } catch (e: Exception) {
+        println("[NOMM] Direct Windows launch failed: " + e.message)
+        false
+    }
+}
 
 fun launchNuclearOption() {
     if (!launching.compareAndSet(false, true)) {
