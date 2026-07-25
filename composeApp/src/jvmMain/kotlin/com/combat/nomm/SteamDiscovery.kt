@@ -31,9 +31,10 @@ object SteamDiscovery {
     private val pendingPings = ConcurrentHashMap<String, (ServerInfo?) -> Unit>()
     private val pendingRulesCallbacks = ConcurrentHashMap<String, (Map<String, String>?) -> Unit>()
     private val pendingLobbyMetadataCallbacks = ConcurrentHashMap<String, (Map<String, String>?) -> Unit>()
+    private const val INIT_TIMEOUT_MILLIS = 15_000L
 
     suspend fun init(): InitStatus {
-        lock.withLock {
+        val deferred = lock.withLock {
             if (initResult.value == InitStatus.OK) return InitStatus.OK
             if (running) return InitStatus.NotInitialized
 
@@ -42,32 +43,50 @@ object SteamDiscovery {
                 fixSteamSdkPath()
             }
 
-            initDeferred = CompletableDeferred()
+            val newDeferred = CompletableDeferred<InitStatus>()
+            initDeferred = newDeferred
 
-            val process = spawnWorker()
-            workerProcess = process
-            val workerIpc = SteamWorkerIPC(process.inputStream, process.outputStream)
-            ipc = workerIpc
+            try {
+                val process = spawnWorker()
+                workerProcess = process
+                val workerIpc = SteamWorkerIPC(process.inputStream, process.outputStream)
+                ipc = workerIpc
 
-            running = true
-            eventReaderJob = scope.launch {
-                readEvents(workerIpc)
-            }
+                running = true
+                eventReaderJob = scope.launch {
+                    readEvents(workerIpc)
+                }
 
-            workerIpc.sendCommand(WorkerCommand.Init)
-
-            val status = initDeferred!!.await()
-            initDeferred = null
-            initResult.value = status
-
-            if (status != InitStatus.OK) {
-                running = false
+                workerIpc.sendCommand(WorkerCommand.Init)
+            } catch (e: Exception) {
+                println("[NOMM] Steam worker failed to start: " + e.message)
                 shutdownWorker()
+                initResult.value = InitStatus.FailedGeneric
+                return InitStatus.FailedGeneric
             }
 
-            println("[NOMM] Steam init: $status")
-            return status
+            newDeferred
         }
+
+        val status = withTimeoutOrNull(INIT_TIMEOUT_MILLIS) {
+            deferred.await()
+        } ?: InitStatus.FailedGeneric.also {
+            println("[NOMM] Steam worker initialization timed out")
+        }
+
+        lock.withLock {
+            // shutdown() may have already completed and cleared this attempt.
+            if (initDeferred === deferred) {
+                initDeferred = null
+                if (status != InitStatus.OK) {
+                    shutdownWorker()
+                }
+                initResult.value = status
+            }
+        }
+
+        println("[NOMM] Steam init: $status")
+        return status
     }
 
     private suspend fun readEvents(workerIpc: SteamWorkerIPC) {
@@ -184,15 +203,50 @@ object SteamDiscovery {
         }
     }
 
-    private suspend fun shutdownWorker() {
+    internal fun stopWorkerForGameLaunch() {
         running = false
+        initDeferred?.complete(InitStatus.FailedGeneric)
+        initDeferred = null
 
         try {
             ipc?.sendCommand(WorkerCommand.Shutdown)
         } catch (_: Exception) {
         }
 
-        ipc?.close()
+        val process = workerProcess
+        workerProcess = null
+        try {
+            process?.destroyForcibly()
+            process?.waitFor(2, TimeUnit.SECONDS)
+        } catch (_: Exception) {
+        }
+
+        try {
+            ipc?.close()
+        } catch (_: Exception) {
+        }
+        ipc = null
+
+        eventReaderJob?.cancel()
+        eventReaderJob = null
+        initResult.value = InitStatus.NotInitialized
+        isRefreshing.value = false
+    }
+
+    private suspend fun shutdownWorker() {
+        running = false
+        initDeferred?.complete(InitStatus.FailedGeneric)
+        initDeferred = null
+
+        try {
+            ipc?.sendCommand(WorkerCommand.Shutdown)
+        } catch (_: Exception) {
+        }
+
+        try {
+            ipc?.close()
+        } catch (_: Exception) {
+        }
         ipc = null
 
         eventReaderJob?.cancelAndJoin()
@@ -211,36 +265,28 @@ object SteamDiscovery {
         isRefreshing.value = false
     }
 
-    private var lastGameRunningCheck = 0L
-    private var lastGameRunningResult = false
+    internal fun isNuclearOptionExecutable(command: String?): Boolean =
+        command?.let { File(it).name.equals("NuclearOption.exe", ignoreCase = true) } == true
 
-    fun isGameRunning(): Boolean {
-        val now = System.currentTimeMillis()
-        if (now - lastGameRunningCheck < 5000) return lastGameRunningResult
-        lastGameRunningCheck = now
-
-        lastGameRunningResult = try {
-            val os = System.getProperty("os.name").lowercase()
-            val output = if (os.contains("win")) {
-                val process = ProcessBuilder(
-                    "powershell", "-NoProfile", "-Command",
-                    "Get-Process -Name 'NuclearOption' -ErrorAction SilentlyContinue | Select-Object -First 1"
-                ).redirectErrorStream(true).start()
-                val result = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                result
-            } else {
-                val process = ProcessBuilder("pgrep", "-f", "NuclearOption")
-                    .redirectErrorStream(true).start()
-                val result = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                result
+    fun isGameRunning(): Boolean = try {
+        val os = System.getProperty("os.name").lowercase()
+        if (os.contains("win")) {
+            val processes = ProcessHandle.allProcesses()
+            try {
+                processes.anyMatch { process ->
+                    isNuclearOptionExecutable(process.info().command().orElse(null))
+                }
+            } finally {
+                processes.close()
             }
-            output.trim().isNotEmpty()
-        } catch (_: Exception) {
-            false
+        } else {
+            val process = ProcessBuilder("pgrep", "-f", "NuclearOption")
+                .redirectErrorStream(true).start()
+            process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor() == 0
         }
-        return lastGameRunningResult
+    } catch (_: Exception) {
+        false
     }
 
     fun requestServerList() {

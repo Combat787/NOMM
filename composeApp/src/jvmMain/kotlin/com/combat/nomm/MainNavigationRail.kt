@@ -18,6 +18,7 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -123,8 +124,8 @@ fun MainNavigationRail(
                 val state = LocalWindowState.current
                 FloatingActionButton(
                     onClick = {
-                        state.isMinimized = true
                         launchNuclearOption()
+                        state.isMinimized = true
 
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -144,6 +145,77 @@ fun MainNavigationRail(
 }
 
 private val launching = AtomicBoolean(false)
+private const val STEAM_WORKER_RELEASE_DELAY_MILLIS = 1_500L
+private const val STEAM_LAUNCH_RETRY_DELAY_MILLIS = 5_000L
+
+internal fun windowsSteamLaunchCommand(steamUri: String): List<String> = listOf(
+    "cmd.exe", "/d", "/s", "/c",
+    "start \"\" \"$steamUri\""
+)
+
+private fun launchNuclearOptionOnWindows() {
+    try {
+        if (SteamDiscovery.isGameRunning()) {
+            println("[NOMM] Game is already running, skipping launch")
+            launching.set(false)
+            return
+        }
+
+        println("[NOMM] Stopping Steam worker before Windows launch")
+        SteamDiscovery.stopWorkerForGameLaunch()
+        // Steam can retain the worker's app-ID session briefly after the process exits.
+        // A request sent during that window is silently discarded as already running.
+        Thread.sleep(STEAM_WORKER_RELEASE_DELAY_MILLIS)
+
+        val steamUri = "steam://rungameid/2168680"
+        println("[NOMM] Launching game via Steam: $steamUri")
+        ProcessBuilder(windowsSteamLaunchCommand(steamUri)).start()
+    } catch (e: Exception) {
+        println("[NOMM] Steam launch failed, falling back to exe: " + e.message)
+        val exeFile = File(SettingsManager.gameFolder, "NuclearOption.exe")
+        if (!exeFile.exists()) {
+            println("[NOMM] Game exe not found, cannot launch")
+            launching.set(false)
+            return
+        }
+        ProcessBuilder(exeFile.absolutePath)
+            .directory(exeFile.parentFile)
+            .start()
+    }
+
+    scope.launch(Dispatchers.IO) {
+        try {
+            println("[NOMM] Waiting for game to start...")
+            val gameStarted = withTimeoutOrNull(60_000L) {
+                val retryAt = System.currentTimeMillis() + STEAM_LAUNCH_RETRY_DELAY_MILLIS
+                var retried = false
+                while (!SteamDiscovery.isGameRunning()) {
+                    if (!retried && System.currentTimeMillis() >= retryAt) {
+                        println("[NOMM] Game not detected; retrying Steam launch once")
+                        ProcessBuilder(windowsSteamLaunchCommand("steam://rungameid/2168680")).start()
+                        retried = true
+                    }
+                    delay(1000L)
+                }
+                true
+            } ?: false
+            if (!gameStarted) {
+                println("[NOMM] Game did not start within 60 seconds")
+                return@launch
+            }
+
+            println("[NOMM] Waiting for game to exit...")
+            while (SteamDiscovery.isGameRunning()) {
+                delay(5000L)
+            }
+            println("[NOMM] Game exited")
+        } finally {
+            println("[NOMM] Restarting Steam worker")
+            SteamDiscovery.init()
+            launching.set(false)
+        }
+    }
+}
 
 fun launchNuclearOption() {
     if (!launching.compareAndSet(false, true)) {
@@ -151,7 +223,13 @@ fun launchNuclearOption() {
         return
     }
 
+    if (System.getProperty("os.name").lowercase().contains("win")) {
+        launchNuclearOptionOnWindows()
+        return
+    }
+
     scope.launch(Dispatchers.IO) {
+        var steamWorkerStopped = false
         try {
             if (SteamDiscovery.isGameRunning()) {
                 println("[NOMM] Game is already running, skipping launch")
@@ -160,6 +238,7 @@ fun launchNuclearOption() {
 
             println("[NOMM] Shutting down Steam worker before launch")
             SteamDiscovery.shutdown()
+            steamWorkerStopped = true
             delay(1000L)
 
             val launched = try {
@@ -168,7 +247,7 @@ fun launchNuclearOption() {
                 println("[NOMM] Launching game via Steam: $steamUri")
                 when {
                     os.contains("win") -> {
-                        ProcessBuilder("cmd.exe", "/c", "start", "", steamUri).start()
+                        ProcessBuilder(windowsSteamLaunchCommand(steamUri)).start()
                     }
                     os.contains("mac") -> {
                         ProcessBuilder("open", steamUri).start()
@@ -209,18 +288,29 @@ fun launchNuclearOption() {
                     .start()
             }
 
-            println("[NOMM] Waiting for game to exit...")
-            while (!SteamDiscovery.isGameRunning()) {
-                delay(1000L)
+            println("[NOMM] Waiting for game to start...")
+            val gameStarted = withTimeoutOrNull(60_000L) {
+                while (!SteamDiscovery.isGameRunning()) {
+                    delay(1000L)
+                }
+                true
+            } ?: false
+            if (!gameStarted) {
+                println("[NOMM] Game did not start within 60 seconds")
+                return@launch
             }
+
+            println("[NOMM] Waiting for game to exit...")
             while (SteamDiscovery.isGameRunning()) {
                 delay(5000L)
             }
             println("[NOMM] Game exited")
 
-            println("[NOMM] Restarting Steam worker")
-            SteamDiscovery.init()
         } finally {
+            if (steamWorkerStopped) {
+                println("[NOMM] Restarting Steam worker")
+                SteamDiscovery.init()
+            }
             launching.set(false)
         }
     }
