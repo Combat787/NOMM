@@ -269,6 +269,7 @@ fun ServerActions(
     controlSize: Dp = 40.dp,
     iconSize: Dp = 24.dp,
 ) {
+    val windowState = LocalWindowState.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -335,8 +336,8 @@ fun ServerActions(
         ) {
             IconButton(
                 onClick = {
-                    if (entry.modlist != null) ServerBrowser.launchWithMods(entry)
-                    else ServerBrowser.launchVanilla()
+                    if (entry.modlist != null) ServerBrowser.launchWithMods(entry, windowState)
+                    else ServerBrowser.launchVanilla(windowState)
                 },
                 modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds()
                     .pointerHoverIcon(PointerIcon.Hand),
@@ -366,7 +367,7 @@ fun ServerActions(
             },
         ) {
             IconButton(
-                onClick = { ServerBrowser.connectToServer(entry) },
+                onClick = { ServerBrowser.connectToServer(entry, windowState) },
                 modifier = Modifier.size(controlSize).clip(CircleShape).clipToBounds()
                     .pointerHoverIcon(PointerIcon.Hand),
             ) {

@@ -18,6 +18,7 @@ object SteamDiscovery {
     @Volatile private var ipc: SteamWorkerIPC? = null
     private var eventReaderJob: Job? = null
     @Volatile private var running = false
+    @Volatile var suspendedForMinimization = false
     private var initDeferred: CompletableDeferred<InitStatus>? = null
 
     val lock = Mutex(false)
@@ -33,6 +34,7 @@ object SteamDiscovery {
     private val pendingLobbyMetadataCallbacks = ConcurrentHashMap<String, (Map<String, String>?) -> Unit>()
 
     suspend fun init(): InitStatus {
+        if (!SettingsManager.config.value.steamworks) return InitStatus.NotInitialized
         lock.withLock {
             if (initResult.value == InitStatus.OK) return InitStatus.OK
             if (running) return InitStatus.NotInitialized
@@ -167,7 +169,7 @@ object SteamDiscovery {
             )
         }
 
-        println("[NOMM] Spawning worker process via: ${commandList.joinToString(" ")}")
+        println("[NOMM] Spawning worker process")
 
         return ProcessBuilder(commandList).apply {
             directory(workingDir)

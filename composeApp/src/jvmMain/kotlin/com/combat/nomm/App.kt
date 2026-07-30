@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
@@ -16,16 +17,23 @@ import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 
 
 val version = json.decodeFromString<Version>(BuildKonfig.VERSION)
 
 val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+val currentScreen = MutableStateFlow<MainNavigation>(MainNavigation.Search)
+
 @Composable
 fun App() {
     val backStack = rememberNavBackStack(MainNavigation.config, MainNavigation.Search)
     val currentKey = backStack.lastOrNull() ?: MainNavigation.Search
+
+    LaunchedEffect(currentKey) {
+        (currentKey as? MainNavigation)?.let { currentScreen.value = it }
+    }
 
     Box(
         modifier = Modifier

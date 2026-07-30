@@ -29,8 +29,11 @@ import dev.nucleusframework.window.material.MaterialTitleBar
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
@@ -38,7 +41,6 @@ import org.jetbrains.compose.resources.painterResource
 import java.io.File
 import java.net.URI
 import kotlin.io.path.toPath
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 
@@ -118,6 +120,77 @@ fun main(args: Array<String>) {
                         .debounce(2.seconds)
                         .collect { state ->
                             SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = state.placement))
+                        }
+                }
+                LaunchedEffect(windowState) {
+                    var suspendJob: Job? = null
+                    var wasMinimized = false
+
+                    snapshotFlow { windowState.isMinimized }
+                        .distinctUntilChanged()
+                        .collect { isMinimized ->
+                            if (isMinimized && !wasMinimized) {
+                                println("[NOMM] Window minimized")
+                                wasMinimized = true
+                                suspendJob = launch {
+                                    delay(60.seconds)
+                                    if (windowState.isMinimized && !SteamDiscovery.isGameRunning()) {
+                                        println("[NOMM] Suspending Steam worker due to minimization")
+                                        SteamDiscovery.shutdown()
+                                        SteamDiscovery.suspendedForMinimization = true
+                                    }
+                                }
+                            } else if (!isMinimized && wasMinimized) {
+                                println("[NOMM] Window restored")
+                                wasMinimized = false
+                                suspendJob?.cancel()
+                                suspendJob = null
+                                if (SteamDiscovery.suspendedForMinimization
+                                    && SettingsManager.config.value.steamworks
+                                    && !SteamDiscovery.isGameRunning()
+                                    && currentScreen.value == MainNavigation.Servers
+                                ) {
+                                    SteamDiscovery.suspendedForMinimization = false
+                                    scope.launch { SteamDiscovery.init() }
+                                }
+                            }
+                        }
+                }
+                LaunchedEffect(Unit) {
+                    var screenSuspendJob: Job? = null
+                    var wasOnServers = currentScreen.value == MainNavigation.Servers
+
+                    currentScreen
+                        .collect { screen ->
+                            val isOnServers = screen == MainNavigation.Servers
+                            if (!isOnServers && wasOnServers) {
+                                println("[NOMM] Navigated away from Servers")
+                                wasOnServers = false
+                                screenSuspendJob = launch {
+                                    delay(10.seconds)
+                                    if (currentScreen.value != MainNavigation.Servers
+                                        && !SteamDiscovery.isGameRunning()
+                                        && !windowState.isMinimized
+                                    ) {
+                                        println("[NOMM] Suspending Steam worker due to screen change")
+                                        SteamDiscovery.shutdown()
+                                        SteamDiscovery.suspendedForMinimization = true
+                                    }
+                                }
+                            } else if (isOnServers && !wasOnServers) {
+                                println("[NOMM] Navigated to Servers")
+                                wasOnServers = true
+                                screenSuspendJob?.cancel()
+                                screenSuspendJob = null
+                                if (SteamDiscovery.suspendedForMinimization
+                                    && SettingsManager.config.value.steamworks
+                                    && !SteamDiscovery.isGameRunning()
+                                    && !windowState.isMinimized
+                                ) {
+                                    SteamDiscovery.suspendedForMinimization = false
+                                    scope.launch { SteamDiscovery.init() }
+                                }
+                            }
                         }
                 }
                 MaterialTitleBar(

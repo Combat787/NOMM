@@ -201,6 +201,17 @@ fun SettingsScreen() {
                         }
                     }
                 )
+                SettingsSwitchRow(
+                    label = "Steamworks Features",
+                    subLabel = "Steamworks enables server browsing and joining",
+                    checked = currentConfig.steamworks,
+                    onCheckedChange = { newValue ->
+                        SettingsManager.updateConfig(currentConfig.copy(steamworks = newValue))
+                        if (!newValue) {
+                            scope.launch { SteamDiscovery.shutdown() }
+                        }
+                    }
+                )
             }
             SettingsGroup(title = "Folders") {
                 ClickableSettingsRow(

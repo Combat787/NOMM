@@ -13,6 +13,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.WindowState
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ fun MainNavigationRail(
 ) {
     val isBepInExInstalled by LocalMods.isBepInExInstalled.collectAsState()
     val isGameExeFound by LocalMods.isGameExeFound.collectAsState()
+    val steamworksEnabled = SettingsManager.config.value.steamworks
 
     NavigationRail(
         modifier = Modifier
@@ -62,15 +64,17 @@ fun MainNavigationRail(
                 drawableResource = Res.drawable.newsstand_24px,
                 label = "Library"
             )
-            RailDestination(
-                selected = currentKey is MainNavigation.Servers,
-                onClick = {
-                    backStack.clear()
-                    backStack.add(MainNavigation.Servers)
-                },
-                drawableResource = Res.drawable.lists_24px,
-                label = "Servers"
-            )
+            if (steamworksEnabled) {
+                RailDestination(
+                    selected = currentKey is MainNavigation.Servers,
+                    onClick = {
+                        backStack.clear()
+                        backStack.add(MainNavigation.Servers)
+                    },
+                    drawableResource = Res.drawable.lists_24px,
+                    label = "Servers"
+                )
+            }
             RailDestination(
                 selected = currentKey is MainNavigation.Settings,
                 onClick = {
@@ -123,9 +127,7 @@ fun MainNavigationRail(
                 val state = LocalWindowState.current
                 FloatingActionButton(
                     onClick = {
-                        state.isMinimized = true
-                        launchNuclearOption()
-
+                        launchNuclearOption(state)
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -145,11 +147,13 @@ fun MainNavigationRail(
 
 private val launching = AtomicBoolean(false)
 
-fun launchNuclearOption() {
+fun launchNuclearOption(windowState: WindowState) {
     if (!launching.compareAndSet(false, true)) {
         println("[NOMM] Launch already in progress, skipping")
         return
     }
+
+    windowState.isMinimized = true
 
     scope.launch(Dispatchers.IO) {
         try {
@@ -158,8 +162,10 @@ fun launchNuclearOption() {
                 return@launch
             }
 
-            println("[NOMM] Shutting down Steam worker before launch")
-            SteamDiscovery.shutdown()
+            if (SettingsManager.config.value.steamworks) {
+                println("[NOMM] Shutting down Steam worker before launch")
+                SteamDiscovery.shutdown()
+            }
             delay(1000L)
 
             val launched = try {
@@ -218,8 +224,10 @@ fun launchNuclearOption() {
             }
             println("[NOMM] Game exited")
 
-            println("[NOMM] Restarting Steam worker")
-            SteamDiscovery.init()
+            if (SettingsManager.config.value.steamworks) {
+                println("[NOMM] Restarting Steam worker")
+                SteamDiscovery.init()
+            }
         } finally {
             launching.set(false)
         }

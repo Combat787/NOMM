@@ -15,11 +15,12 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.0.4"
+val appVersion = "5.0.5"
 
 val changelog = """
-    Fixed performance issues relating to constant export of nommpack.
-    Added favourites filter.
+    Added Steamworks toggle in settings.
+    Added detection when NOMM is minimized or Sever Browser closed (kills steamworker).
+    Fixed stacking of available update popups.
 """.trimIndent()
 
 java {

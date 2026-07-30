@@ -14,6 +14,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import androidx.compose.ui.window.WindowState
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -489,17 +490,17 @@ object ServerBrowser {
         }
     }
 
-    fun launchWithMods(entry: ServerEntry) {
+    fun launchWithMods(entry: ServerEntry, windowState: WindowState) {
         scope.launch(Dispatchers.IO) {
             entry.modlist?.let { syncModsToModlist(it) }
-            launchNuclearOption()
+            launchNuclearOption(windowState)
         }
     }
 
-    fun launchVanilla() {
+    fun launchVanilla(windowState: WindowState) {
         scope.launch(Dispatchers.IO) {
             disableAllMods()
-            launchNuclearOption()
+            launchNuclearOption(windowState)
         }
     }
 
@@ -595,7 +596,7 @@ object ServerBrowser {
         }
     }
 
-    fun connectToServer(entry: ServerEntry) {
+    fun connectToServer(entry: ServerEntry, windowState: WindowState) {
         scope.launch(Dispatchers.IO) {
             // 1. Enable the server's required mods (or disable all for vanilla)
             val modlist = entry.modlist
@@ -643,7 +644,7 @@ object ServerBrowser {
             File(configDir, "nomm-connect.json").writeText(connectJson)
 
             // 3. Launch game
-            launchNuclearOption()
+            launchNuclearOption(windowState)
         }
     }
 }

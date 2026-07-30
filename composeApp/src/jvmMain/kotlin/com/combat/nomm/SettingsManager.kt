@@ -46,6 +46,7 @@ data class Configuration(
     val ignoreHashMismatch: Boolean = false,
     val ignoreNewUpdates: Boolean = false,
     val nosmr: Boolean = true,
+    val steamworks: Boolean = true,
     val hueValue: Float = 0.3f,
     val placement: WindowPlacement = WindowPlacement.Floating,
 ) {
