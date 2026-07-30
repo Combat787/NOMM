@@ -11,6 +11,7 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 object SteamDiscovery {
@@ -35,6 +36,7 @@ object SteamDiscovery {
 
     suspend fun init(): InitStatus {
         if (!SettingsManager.config.value.steamworks) return InitStatus.NotInitialized
+
         lock.withLock {
             if (initResult.value == InitStatus.OK) return InitStatus.OK
             if (running) return InitStatus.NotInitialized
@@ -57,8 +59,13 @@ object SteamDiscovery {
             }
 
             workerIpc.sendCommand(WorkerCommand.Init)
+        }
 
-            val status = initDeferred!!.await()
+        val status = withTimeoutOrNull(15.seconds) {
+            initDeferred?.await()
+        } ?: InitStatus.FailedGeneric
+
+        lock.withLock {
             initDeferred = null
             initResult.value = status
 
@@ -163,10 +170,38 @@ object SteamDiscovery {
                 "worker"
             )
         } else {
-            listOf(
-                processPath,
-                "worker"
-            )
+            // Native distribution (AppImage, deb, rpm, etc.)
+            // Find the bundled Java runtime and construct proper command
+            val processFile = File(processPath)
+            val appDir = processFile.parentFile?.parentFile // bin/.. -> app root
+            val runtimeDir = File(appDir, "runtime")
+            val javaBin = if (System.getProperty("os.name").lowercase().contains("win")) {
+                File(runtimeDir, "bin/java.exe")
+            } else {
+                File(runtimeDir, "bin/java")
+            }
+
+            if (javaBin.exists()) {
+                // Use bundled runtime with all JARs in app directory
+                val appJarsDir = File(appDir, "app")
+                val jars = appJarsDir.listFiles { file -> file.extension == "jar" } ?: emptyArray()
+                val classPath = jars.joinToString(File.pathSeparator) { it.absolutePath }
+
+                listOf(
+                    javaBin.absolutePath,
+                    "--enable-native-access=ALL-UNNAMED",
+                    "-cp", classPath,
+                    "com.combat.nomm.MainKt",
+                    "worker"
+                )
+            } else {
+                // Fallback: try to use the native launcher directly
+                // This might work if the launcher supports passing arguments
+                listOf(
+                    processPath,
+                    "worker"
+                )
+            }
         }
 
         println("[NOMM] Spawning worker process")
@@ -200,12 +235,23 @@ object SteamDiscovery {
         eventReaderJob?.cancelAndJoin()
         eventReaderJob = null
 
-        withContext(Dispatchers.IO) {
-            try {
-                workerProcess?.waitFor(5, TimeUnit.SECONDS)
-            } catch (_: Exception) {
+        val process = workerProcess
+        if (process != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val exited = process.waitFor(5, TimeUnit.SECONDS)
+                    if (!exited) {
+                        println("[NOMM] Worker did not exit gracefully, forcing termination")
+                        process.destroyForcibly()
+                        process.waitFor(2, TimeUnit.SECONDS)
+                    }
+                } catch (_: Exception) {
+                }
+                
+                if (process.isAlive) {
+                    println("[NOMM] Worker still alive after force termination")
+                }
             }
-            workerProcess?.destroyForcibly()
         }
         workerProcess = null
 
@@ -218,27 +264,30 @@ object SteamDiscovery {
 
     fun isGameRunning(): Boolean {
         val now = System.currentTimeMillis()
-        if (now - lastGameRunningCheck < 5000) return lastGameRunningResult
+        if (now - lastGameRunningCheck < 1000) return lastGameRunningResult
         lastGameRunningCheck = now
 
         lastGameRunningResult = try {
             val os = System.getProperty("os.name").lowercase()
-            val output = if (os.contains("win")) {
-                val process = ProcessBuilder(
-                    "powershell", "-NoProfile", "-Command",
-                    "Get-Process -Name 'NuclearOption' -ErrorAction SilentlyContinue | Select-Object -First 1"
-                ).redirectErrorStream(true).start()
-                val result = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                result
+            val isWindows = os.contains("win")
+            val processName = if (isWindows) {
+                "nuclearoption.exe"
             } else {
-                val process = ProcessBuilder("pgrep", "-f", "NuclearOption")
-                    .redirectErrorStream(true).start()
-                val result = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                result
+                "NuclearOption"
             }
-            output.trim().isNotEmpty()
+            
+            ProcessHandle.allProcesses()
+                .anyMatch { process ->
+                    process.info().command()
+                        .map { cmd -> 
+                            if (isWindows) {
+                                cmd.lowercase().endsWith(processName)
+                            } else {
+                                cmd.endsWith(processName)
+                            }
+                        }
+                        .orElse(false)
+                }
         } catch (_: Exception) {
             false
         }

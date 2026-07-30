@@ -106,7 +106,7 @@ fun MainNavigationRail(
                             )
                         } else {
                             CircularProgressIndicator(
-                                progress = { bepinexState!!.progress ?: 1f },
+                                progress = { bepinexState?.progress ?: 1f },
                                 modifier = Modifier.size(36.dp),
                                 strokeWidth = 4.dp,
                             )
@@ -153,8 +153,6 @@ fun launchNuclearOption(windowState: WindowState) {
         return
     }
 
-    windowState.isMinimized = true
-
     scope.launch(Dispatchers.IO) {
         try {
             if (SteamDiscovery.isGameRunning()) {
@@ -165,41 +163,16 @@ fun launchNuclearOption(windowState: WindowState) {
             if (SettingsManager.config.value.steamworks) {
                 println("[NOMM] Shutting down Steam worker before launch")
                 SteamDiscovery.shutdown()
+                delay(1500L)
             }
-            delay(1000L)
 
+            val steamUri = "steam://rungameid/2168680"
+            println("[NOMM] Launching game via Steam: $steamUri")
+            
             val launched = try {
-                val os = System.getProperty("os.name").lowercase()
-                val steamUri = "steam://rungameid/2168680"
-                println("[NOMM] Launching game via Steam: $steamUri")
-                when {
-                    os.contains("win") -> {
-                        ProcessBuilder("cmd.exe", "/c", "start", "", steamUri).start()
-                    }
-                    os.contains("mac") -> {
-                        ProcessBuilder("open", steamUri).start()
-                    }
-                    else -> {
-                        var launched = false
-                        if (File(System.getProperty("user.home") + "/snap/steam").exists()) {
-                            println("[NOMM] Detected Snap Steam, launching via snap run")
-                            val exit = ProcessBuilder("bash", "-c", "snap run steam -- \"$steamUri\"").start().waitFor()
-                            if (exit == 0) launched = true
-                        }
-                        if (!launched && ProcessBuilder("which", "steam").start().waitFor() == 0) {
-                            println("[NOMM] Launching via steam command")
-                            ProcessBuilder("bash", "-c", "steam -- \"$steamUri\"").start()
-                            launched = true
-                        }
-                        if (!launched) {
-                            println("[NOMM] Launching via xdg-open")
-                            ProcessBuilder("xdg-open", steamUri).start()
-                        }
-                    }
-                }
-                true
+                launchSteamPlatformSpecific(steamUri)
             } catch (e: Exception) {
-                println("[NOMM] Steam launch failed, falling back to exe: ${e.message}")
+                println("[NOMM] Steam launch failed: ${e.message}")
                 false
             }
 
@@ -210,27 +183,90 @@ fun launchNuclearOption(windowState: WindowState) {
                     return@launch
                 }
                 println("[NOMM] Launching NuclearOption.exe directly")
-                ProcessBuilder(exeFile.absolutePath)
-                    .directory(exeFile.parentFile)
-                    .start()
+                try {
+                    ProcessBuilder(exeFile.absolutePath)
+                        .directory(exeFile.parentFile)
+                        .start()
+                } catch (e: Exception) {
+                    println("[NOMM] Direct exe launch failed: ${e.message}")
+                    return@launch
+                }
             }
 
-            println("[NOMM] Waiting for game to exit...")
-            while (!SteamDiscovery.isGameRunning()) {
+            windowState.isMinimized = true
+
+            println("[NOMM] Waiting for game to start...")
+            var gameStarted = false
+            val startTime = System.currentTimeMillis()
+            while (System.currentTimeMillis() - startTime < 60000) {
+                if (SteamDiscovery.isGameRunning()) {
+                    gameStarted = true
+                    break
+                }
                 delay(1000L)
             }
+
+            if (!gameStarted) {
+                println("[NOMM] Game did not start within 60 seconds")
+                windowState.isMinimized = false
+                return@launch
+            }
+
+            println("[NOMM] Game started, waiting for exit...")
             while (SteamDiscovery.isGameRunning()) {
                 delay(5000L)
             }
             println("[NOMM] Game exited")
-
+        } finally {
+            launching.set(false)
             if (SettingsManager.config.value.steamworks) {
                 println("[NOMM] Restarting Steam worker")
                 SteamDiscovery.init()
             }
-        } finally {
-            launching.set(false)
         }
+    }
+}
+
+private fun launchSteamPlatformSpecific(steamUri: String): Boolean {
+    val os = System.getProperty("os.name").lowercase()
+    return try {
+        when {
+            os.contains("win") -> {
+                ProcessBuilder("cmd.exe", "/d", "/c", "start", "", steamUri).start()
+                true
+            }
+            os.contains("mac") -> {
+                ProcessBuilder("open", steamUri).start()
+                true
+            }
+            else -> {
+                // Linux: try different Steam launch methods
+                val home = System.getProperty("user.home")
+                
+                // Try snap Steam first
+                if (File("$home/snap/steam").exists()) {
+                    println("[NOMM] Detected Snap Steam, launching via snap run")
+                    val exit = ProcessBuilder("bash", "-c", "snap run steam -- $steamUri").start().waitFor()
+                    if (exit == 0) return true
+                }
+                
+                // Try regular steam command
+                val whichSteam = ProcessBuilder("which", "steam").start()
+                if (whichSteam.waitFor() == 0) {
+                    println("[NOMM] Launching via steam command")
+                    ProcessBuilder("steam", steamUri).start()
+                    return true
+                }
+                
+                // Fallback to xdg-open
+                println("[NOMM] Launching via xdg-open")
+                ProcessBuilder("xdg-open", steamUri).start()
+                true
+            }
+        }
+    } catch (e: Exception) {
+        println("[NOMM] Platform-specific Steam launch failed: ${e.message}")
+        false
     }
 }
 

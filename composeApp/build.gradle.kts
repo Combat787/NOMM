@@ -15,12 +15,15 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.0.5"
+val appVersion = "5.0.6"
 
 val changelog = """
     Added Steamworks toggle in settings.
     Added detection when NOMM is minimized or Sever Browser closed (kills steamworker).
     Fixed stacking of available update popups.
+    Fixed a NullPointerException in MainNavigationRail.kt @ ln 109.
+    Fixed server browsing for Linux, spawnWorker() now detects native distributions of java.
+    Made launching Nuclear Option more reliable with thanks to GitHub user 'blacknight2u'.
 """.trimIndent()
 
 java {
