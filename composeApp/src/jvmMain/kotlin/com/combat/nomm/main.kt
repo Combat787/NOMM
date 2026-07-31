@@ -30,11 +30,13 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
@@ -99,14 +101,20 @@ fun main(args: Array<String>) {
         ) {
             MaterialDecoratedWindow(
                 onCloseRequest = {
-                    SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = windowState.placement))
                     runBlocking {
-                        SettingsManager.saveConfig()
-                        SettingsManager.saveCachedManifest()
+                        try {
+                            withTimeout(5000) {
+                                SettingsManager.updateConfig(SettingsManager.config.value.copy(placement = windowState.placement))
+                                SettingsManager.saveConfig()
+                                SettingsManager.saveCachedManifest()
+                                SteamDiscovery.shutdown()
+                            }
+                        } catch (e: TimeoutCancellationException) {
+                            println("[NOMM] Shutdown timed out, force killing worker")
+                            SteamDiscovery.forceKillWorker()
+                        }
                     }
-                    runBlocking {
-                        SteamDiscovery.shutdown()
-                    }
+                    scope.coroutineContext[Job]?.cancel()
                     exitApplication()
                 },
                 title = "Nuclear Option Mod Manager | ${BuildKonfig.VERSION}",

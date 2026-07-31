@@ -197,6 +197,7 @@ fun UpdateDialog(
 
 @Composable
 fun CriticalDialog(criticalInformation: String, additional: String, onDismiss: () -> Unit) {
+    val isModUpdateDialog = criticalInformation.contains("Available Mod Update")
 
     AlertDialog(
         onDismissRequest = {
@@ -215,6 +216,14 @@ fun CriticalDialog(criticalInformation: String, additional: String, onDismiss: (
             )
         },
         confirmButton = {
+            if (isModUpdateDialog) {
+                Button(onClick = {
+                    LocalMods.updateAll()
+                    onDismiss()
+                }) {
+                    Text("Update All")
+                }
+            }
             TextButton(onClick = onDismiss) {
                 Text("Dismiss")
             }

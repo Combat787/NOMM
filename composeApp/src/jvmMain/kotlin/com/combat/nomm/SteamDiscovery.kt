@@ -24,6 +24,23 @@ object SteamDiscovery {
 
     val lock = Mutex(false)
 
+    init {
+        Runtime.getRuntime().addShutdownHook(Thread({
+            println("[NOMM] JVM shutdown hook: cleaning up Steam worker")
+            val process = workerProcess
+            if (process != null && process.isAlive) {
+                try {
+                    ipc?.sendCommand(WorkerCommand.Shutdown)
+                } catch (_: Exception) {}
+                val exited = process.waitFor(3, TimeUnit.SECONDS)
+                if (!exited) {
+                    println("[NOMM] Worker did not exit gracefully during shutdown hook, force killing")
+                    process.destroyForcibly()
+                }
+            }
+        }, "nomm-shutdown-hook"))
+    }
+
     val isRefreshing: StateFlow<Boolean>
         field = MutableStateFlow(false)
 
@@ -221,12 +238,32 @@ object SteamDiscovery {
         }
     }
 
+    fun forceKillWorker() {
+        println("[NOMM] Force killing Steam worker")
+        val process = workerProcess
+        if (process != null && process.isAlive) {
+            process.destroyForcibly()
+            try {
+                process.waitFor(2, TimeUnit.SECONDS)
+            } catch (_: Exception) {}
+        }
+        workerProcess = null
+        ipc?.close()
+        ipc = null
+        eventReaderJob?.cancel()
+        eventReaderJob = null
+        running = false
+        initResult.value = InitStatus.NotInitialized
+        isRefreshing.value = false
+    }
+
     private suspend fun shutdownWorker() {
         running = false
 
         try {
             ipc?.sendCommand(WorkerCommand.Shutdown)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            println("[NOMM] Failed to send shutdown command to worker: ${e.message}")
         }
 
         ipc?.close()
@@ -243,13 +280,14 @@ object SteamDiscovery {
                     if (!exited) {
                         println("[NOMM] Worker did not exit gracefully, forcing termination")
                         process.destroyForcibly()
-                        process.waitFor(2, TimeUnit.SECONDS)
+                        val forceExited = process.waitFor(2, TimeUnit.SECONDS)
+                        if (!forceExited) {
+                            println("[NOMM] Worker still alive after force termination")
+                        }
                     }
-                } catch (_: Exception) {
-                }
-                
-                if (process.isAlive) {
-                    println("[NOMM] Worker still alive after force termination")
+                } catch (e: Exception) {
+                    println("[NOMM] Error during worker shutdown wait: ${e.message}")
+                    runCatching { process.destroyForcibly() }
                 }
             }
         }

@@ -1,11 +1,18 @@
 package com.combat.nomm.steamworker
 
 import com.combat.nomm.*
+import com.codedisaster.steamworks.SteamAPI
 import kotlin.system.exitProcess
 
 fun runSteamWorker() {
     val ipc = SteamWorkerIPC(System.`in`, System.out)
     val service = SteamWorkerService(ipc)
+
+    Runtime.getRuntime().addShutdownHook(Thread({
+        println("[SteamWorker] JVM shutdown hook: shutting down Steam API")
+        runCatching { SteamAPI.shutdown() }
+        ipc.close()
+    }, "steam-worker-shutdown-hook"))
 
     while (true) {
         val command = try {
