@@ -217,7 +217,7 @@ fun SettingsScreen() {
                     label = "Open Nuclear Option Folder",
                     subLabel = "Click to open the Folder containing the Logs, Missions and Blocklist.",
                     onClick = {
-                        scope.launch { openFolder(getNuclearOptionFolder()) }
+                        scope.launch { openFolder(getNuclearOptionFolder(SettingsManager.gameFolder)) }
                     })
                 ClickableSettingsRow(
                     label = "Open Nuclear Option Game Folder",

@@ -1,6 +1,11 @@
 package com.combat.nomm
 
 import java.io.File
+import java.nio.file.Files
+
+private const val NUCLEAR_OPTION_APP_ID = "2168680"
+private const val NUCLEAR_OPTION_PROTON_PATH =
+    "pfx/drive_c/users/steamuser/AppData/LocalLow/Shockfront/NuclearOption"
 
 fun getGameFolder(folderName: String, executableName: String): File? {
     val steamPath = getSteamPath() ?: return null
@@ -43,7 +48,7 @@ fun getSteamPath(): String? {
     }
 }
 
-fun getNuclearOptionFolder(): File {
+fun getNuclearOptionFolder(gameFolder: File?): File {
     val os = System.getProperty("os.name").lowercase()
     val userHome = System.getProperty("user.home")
 
@@ -58,8 +63,10 @@ fun getNuclearOptionFolder(): File {
 
         else -> {
             // Linux: Nuclear Option runs via Steam Proton, folder is inside compatdata
-            val appId = "2168680"
-            val protonPath = "steamapps/compatdata/$appId/pfx/drive_c/users/steamuser/AppData/LocalLow/Shockfront/NuclearOption"
+            val fromGameFolder = gameFolder?.let(::getNuclearOptionFolderFromGameFolder)
+            if (fromGameFolder != null) return fromGameFolder
+
+            val protonPath = "steamapps/compatdata/$NUCLEAR_OPTION_APP_ID/$NUCLEAR_OPTION_PROTON_PATH"
 
             val steamPaths = listOf(
                 File(userHome, ".local/share/Steam/$protonPath"),
@@ -71,4 +78,22 @@ fun getNuclearOptionFolder(): File {
             steamPaths.firstOrNull { it.exists() } ?: File(userHome, ".local/share/Steam/$protonPath")
         }
     }
+}
+
+internal fun getNuclearOptionFolderFromGameFolder(gameFolder: File): File? {
+    if (!gameFolder.isDirectory || !File(gameFolder, "NuclearOption.exe").isFile) return null
+
+    val steamApps = gameFolder.toPath()
+        .toAbsolutePath()
+        .normalize()
+        .parent
+        ?.takeIf { it.fileName.toString().equals("common", ignoreCase = true) }
+        ?.parent
+        ?.takeIf { it.fileName.toString().equals("steamapps", ignoreCase = true) }
+        ?: return null
+
+    val compatData = steamApps.resolve("compatdata").resolve(NUCLEAR_OPTION_APP_ID)
+    if (!Files.isDirectory(compatData)) return null
+
+    return compatData.resolve(NUCLEAR_OPTION_PROTON_PATH).toFile()
 }

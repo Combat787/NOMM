@@ -15,12 +15,10 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.0.7"
+val appVersion = "5.0.8"
 
 val changelog = """
-    Allowed steamworks to close gracefully, hopefully fixing issues caused by two instances of NOMM running.
-    Added 'Update All' button to the available updates window.
-    Fixed folder buttons hanging on Linux by using non-blocking platform-specific commands.
+    Linux fixes: Path related lookups.
 """.trimIndent()
 
 java {
@@ -80,6 +78,10 @@ kotlin {
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
             implementation("org.slf4j:slf4j-simple:2.0.17")
+        }
+
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }
