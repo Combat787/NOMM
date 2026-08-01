@@ -177,7 +177,12 @@ fun launchNuclearOption(windowState: WindowState) {
             }
 
             if (!launched) {
-                val exeFile = File(SettingsManager.gameFolder, "NuclearOption.exe")
+                val gameFolder = SettingsManager.gameFolder
+                if (gameFolder == null) {
+                    println("[NOMM] Game folder not set, cannot launch")
+                    return@launch
+                }
+                val exeFile = File(gameFolder, "NuclearOption.exe")
                 if (!exeFile.exists()) {
                     println("[NOMM] Game exe not found, cannot launch")
                     return@launch

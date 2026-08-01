@@ -22,7 +22,10 @@ object RepoMods {
 
     fun fetchManifest() {
         scope.launch {
-            if (!mutex.tryLock()) return@launch
+            if (!mutex.tryLock()) {
+                println("[NOMM] Manifest fetch already in progress, skipping")
+                return@launch
+            }
             try {
                 isLoading.value = true
                 val fetched = if (SettingsManager.config.value.fakeManifest) {
@@ -129,15 +132,23 @@ object RepoMods {
 
 
         val installedMod = LocalMods.mods.value[id]
+        val wasEnabled = installedMod?.enabled == true
         installedMod?.disable()
 
         val disabledFolder = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
         val dir = File(disabledFolder, id)
 
         if (dir.exists()) dir.deleteRecursively()
-        if (!dir.mkdirs()) return
+        if (!dir.mkdirs()) {
+            println("[NOMM] Failed to create install directory for $id")
+            return
+        }
 
-        Installer.installMod(id, url, dir, hash) {
+        Installer.installMod(id, url, dir, hash, onError = {
+            if (wasEnabled) {
+                LocalMods.mods.value[id]?.enable()
+            }
+        }) {
             onSuccess(dir)
         }
     }

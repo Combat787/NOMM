@@ -28,6 +28,7 @@ fun <T> ListScreen(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String = "Search mods...",
+    emptyMessage: String = "Nothing here. huh",
     buttons: @Composable (RowScope.() -> Unit),
     items: List<T>,
     key: ((T) -> Any)? = null,
@@ -67,7 +68,7 @@ fun <T> ListScreen(
                 item {
                     SelectionContainer {
                         Text(
-                            "Nothing here. huh",
+                            emptyMessage,
                             modifier = Modifier.padding(horizontal = 16.dp),
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,

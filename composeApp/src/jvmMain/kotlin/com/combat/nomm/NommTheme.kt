@@ -4,6 +4,7 @@ package com.combat.nomm
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -31,33 +32,32 @@ fun NOMMTheme(
         style = paletteStyle,
         contrastLevel = contrast.value,
         animate = true,
-        typography = getTypography(),
+        typography = rememberTypography(),
         content = content,
         specVersion = ColorSpec.SpecVersion.SPEC_2025,
     )
 }
 
 @Composable
-fun getTypography(): Typography {
-    val jetbrainsMono = FontFamily(
-        Font(Res.font.JetBrainsMono, FontWeight.Normal)
-    )
-
-    return Typography(
-        displayLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 57.sp),
-        displayMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 45.sp),
-        displaySmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 36.sp),
-        headlineLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 32.sp),
-        headlineMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 28.sp),
-        headlineSmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 24.sp),
-        titleLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 22.sp),
-        titleMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-        titleSmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-        bodyLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-        bodyMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-        bodySmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 12.sp),
-        labelLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-        labelMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 12.sp),
-        labelSmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 11.sp)
-    )
+fun rememberTypography(): Typography {
+    val jetbrainsMono = FontFamily(Font(Res.font.JetBrainsMono, FontWeight.Normal))
+    return remember {
+        Typography(
+            displayLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 57.sp),
+            displayMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 45.sp),
+            displaySmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 36.sp),
+            headlineLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 32.sp),
+            headlineMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 28.sp),
+            headlineSmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 24.sp),
+            titleLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 22.sp),
+            titleMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 16.sp),
+            titleSmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+            bodyLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 16.sp),
+            bodyMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+            bodySmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 12.sp),
+            labelLarge = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+            labelMedium = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 12.sp),
+            labelSmall = TextStyle(fontFamily = jetbrainsMono, fontWeight = FontWeight.Normal, fontSize = 11.sp)
+        )
+    }
 }

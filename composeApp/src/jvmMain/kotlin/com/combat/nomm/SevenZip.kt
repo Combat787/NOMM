@@ -2,11 +2,10 @@ package com.combat.nomm
 
 import net.sf.sevenzipjbinding.SevenZip
 import java.io.File
-import java.lang.management.ManagementFactory
 
 fun initializeSevenZipNative(): Boolean {
     return try {
-        val pid = ManagementFactory.getRuntimeMXBean().name.split("@")[0]
+        val pid = ProcessHandle.current().pid().toString()
         val appDataRoot = File(System.getProperty("user.home"), ".nomm/natives")
         val currentInstanceDir = File(appDataRoot, pid)
 
@@ -25,7 +24,8 @@ fun initializeSevenZipNative(): Boolean {
         Runtime.getRuntime().addShutdownHook(Thread {
             try {
                 currentInstanceDir.deleteRecursively()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                println("[NOMM] Shutdown hook failed to clean natives: ${e.message}")
             }
         })
 

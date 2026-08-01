@@ -46,10 +46,6 @@ fun ServerBrowserScreen(
     }
     
     
-    LaunchedEffect(ServerBrowser.sortBy) {
-        ServerBrowser.refreshAll()
-    }
-
     val localMods by LocalMods.mods.collectAsState()
     LaunchedEffect(localMods) {
         ServerBrowser.refreshModStatuses()
@@ -59,6 +55,7 @@ fun ServerBrowserScreen(
         query = ServerBrowser.searchQuery,
         onQueryChange = { ServerBrowser.searchQuery = it },
         placeholder = "Search servers...",
+        emptyMessage = "Nothing here. Is Steam running?",
         buttons = {
 
             val contentColor = MaterialTheme.colorScheme.onSecondary
@@ -256,15 +253,20 @@ fun ServerItem(entry: ServerEntry, onClick: () -> Unit) {
         }
     }
 
-    ListScreenItem(
+    val titleColor = MaterialTheme.colorScheme.onSurface
+    val titleStyle = MaterialTheme.typography.titleMedium
+    val annotatedName = remember(entry.displayName, titleColor, titleStyle) {
         buildAnnotatedString {
             withStyle(
-                MaterialTheme.typography.titleMedium.toSpanStyle()
-                    .copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Black)
+                titleStyle.toSpanStyle()
+                    .copy(color = titleColor, fontWeight = FontWeight.Black)
             ) {
                 append(entry.displayName)
             }
-        },
+        }
+    }
+    ListScreenItem(
+        annotatedName,
         missionName ?: "",
         onClick = onClick,
         details = {

@@ -38,8 +38,15 @@ fun ModDetailScreen(
     onOpenMod: (String) -> Unit,
     onBack: () -> Unit,
 ) {
-    val mod = RepoMods.mods.collectAsState().value[modId]
-        ?: SettingsManager.cachedManifest.value.manifest.find { it.id == modId } ?: run { onBack(); return }
+    val repoMods by RepoMods.mods.collectAsState()
+    val cachedManifest = SettingsManager.cachedManifest.value
+
+    val mod = repoMods[modId] ?: cachedManifest.manifest.find { it.id == modId }
+
+    if (mod == null) {
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
 
     val backStack = rememberNavBackStack(ModNavigation.config, ModNavigation.Details)
     val currentKey = backStack.lastOrNull() ?: ModNavigation.Details
@@ -203,7 +210,7 @@ fun ModActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (version != null && modMeta?.isUnidentified ?: true) {
+        if (version != null && (modMeta?.isUnidentified ?: true)) {
             val latest = mod.artifacts.maxOf { it.version }
             if ((modMeta?.artifact?.version != version) && (version != latest)) {
                 val text = "Install $version"

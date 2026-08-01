@@ -17,6 +17,7 @@ import kotlinx.serialization.json.put
 import androidx.compose.ui.window.WindowState
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 enum class ModStatus {
@@ -90,14 +91,14 @@ object ServerFavorites {
         if (servers.value.any { it.ip == normalized && it.gamePort == gamePort }) return
         servers.update { it + FavoriteServer(normalized, gamePort, name) }
         scope.launch {
-            save()
+            runCatching { save() }.onFailure { println("[NOMM] Failed to save favorites: ${it.message}") }
         }
     }
 
     fun remove(ip: String, gamePort: Long) {
         servers.update { it.filterNot { s -> s.ip == ip && s.gamePort == gamePort } }
         scope.launch {
-            save()
+            runCatching { save() }.onFailure { println("[NOMM] Failed to save favorites: ${it.message}") }
         }
     }
 
@@ -180,7 +181,7 @@ object ServerBrowser {
     val installingModIds: StateFlow<Set<String>>
         field = MutableStateFlow(emptySet())
 
-    var modHashLookup: Map<String, PackageReference> = emptyMap()
+    @Volatile var modHashLookup: Map<String, PackageReference> = emptyMap()
 
     var searchQuery: String by mutableStateOf("")
     var showUser: Boolean by mutableStateOf(true)
@@ -570,9 +571,11 @@ object ServerBrowser {
         val queryPort = entry.info?.queryPort ?: return
         if (queryPort <= 0) return
 
-        val received = suspendCancellableCoroutine<Map<String, String>?> { cont ->
-            SteamDiscovery.queryRules(entry.fav.ip, queryPort) { rules ->
-                if (cont.isActive) cont.resumeWith(Result.success(rules))
+        val received = withTimeoutOrNull(15.seconds) {
+            suspendCancellableCoroutine<Map<String, String>?> { cont ->
+                SteamDiscovery.queryRules(entry.fav.ip, queryPort) { rules ->
+                    if (cont.isActive) cont.resumeWith(Result.success(rules))
+                }
             }
         } ?: return
 
@@ -616,9 +619,11 @@ object ServerBrowser {
 
             val connectJson = if (entry.isLobby) {
                 val lobbyId = entry.fav.gamePort
-                val metadata = suspendCancellableCoroutine<Map<String, String>?> { cont ->
-                    SteamDiscovery.queryLobbyMetadata(lobbyId) { rules ->
-                        if (cont.isActive) cont.resumeWith(Result.success(rules))
+                val metadata = withTimeoutOrNull(15.seconds) {
+                    suspendCancellableCoroutine<Map<String, String>?> { cont ->
+                        SteamDiscovery.queryLobbyMetadata(lobbyId) { rules ->
+                            if (cont.isActive) cont.resumeWith(Result.success(rules))
+                        }
                     }
                 }
                 val hostAddress = metadata?.get("HostAddress") ?: ""

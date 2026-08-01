@@ -22,9 +22,11 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import nuclearoptionmodmanager.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 
 @Composable
@@ -40,7 +42,7 @@ fun ServerDetailScreen(
     }
 
     if (entry == null) {
-        onBack()
+        LaunchedEffect(Unit) { onBack() }
         return
     }
 
@@ -65,9 +67,11 @@ fun ServerDetailScreen(
     LaunchedEffect(entry.fav.ip, entry.info?.queryPort) {
         if (entry.isLobby) {
             val lobbyId = entry.fav.gamePort
-            val received = suspendCancellableCoroutine<Map<String, String>?> { cont ->
-                SteamDiscovery.queryLobbyMetadata(lobbyId) { rules ->
-                    if (cont.isActive) cont.resumeWith(Result.success(rules))
+            val received = withTimeoutOrNull(15.seconds) {
+                suspendCancellableCoroutine<Map<String, String>?> { cont ->
+                    SteamDiscovery.queryLobbyMetadata(lobbyId) { rules ->
+                        if (cont.isActive) cont.resumeWith(Result.success(rules))
+                    }
                 }
             }
             if (received != null) {
@@ -85,9 +89,11 @@ fun ServerDetailScreen(
             val qp = entry.info?.queryPort ?: return@LaunchedEffect
             val maxAttempts = 3
             for (attempt in 1..maxAttempts) {
-                val received = suspendCancellableCoroutine<Map<String, String>?> { cont ->
-                    SteamDiscovery.queryRules(entry.fav.ip, qp) { rules ->
-                        if (cont.isActive) cont.resumeWith(Result.success(rules))
+                val received = withTimeoutOrNull(15.seconds) {
+                    suspendCancellableCoroutine<Map<String, String>?> { cont ->
+                        SteamDiscovery.queryRules(entry.fav.ip, qp) { rules ->
+                            if (cont.isActive) cont.resumeWith(Result.success(rules))
+                        }
                     }
                 }
                 if (received != null) {
@@ -201,7 +207,7 @@ fun ServerDetails(
             var uptime by remember { mutableStateOf<String?>(null) }
             LaunchedEffect(Unit) {
                 while (true) {
-                    delay(100.milliseconds)
+                    delay(1000.milliseconds)
                     uptime = effectiveMissionData?.startTime?.let { startTime ->
                         computeUptime(startTime)
                     }
@@ -604,7 +610,7 @@ private fun ServerDetailsContent(
                     var uptime by remember { mutableStateOf<String?>(null) }
                     LaunchedEffect(Unit) {
                         while (true) {
-                            delay(100.milliseconds)
+                            delay(1000.milliseconds)
                             uptime = effectiveMissionData?.startTime?.let { startTime ->
                                 computeUptime(startTime)
                             }

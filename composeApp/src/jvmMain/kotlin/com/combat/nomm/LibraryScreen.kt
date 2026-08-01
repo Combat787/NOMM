@@ -20,13 +20,15 @@ fun LibraryScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val localMods by LocalMods.mods.collectAsState()
+    val repoMods by RepoMods.mods.collectAsState()
+    val cachedManifest = SettingsManager.cachedManifest.value
 
     var menuExpanded by remember { mutableStateOf(false) }
 
-    val installedExtensions = remember(localMods) {
+    val installedExtensions = remember(localMods, repoMods, cachedManifest) {
         localMods.values.map { modMeta ->
-            RepoMods.mods.value[modMeta.id]
-                ?: SettingsManager.cachedManifest.value.manifest.find { it.id == modMeta.id } ?: Extension(
+            repoMods[modMeta.id]
+                ?: cachedManifest.manifest.find { it.id == modMeta.id } ?: Extension(
                     id = modMeta.id,
                     displayName = modMeta.id,
                     description = "",
@@ -48,6 +50,7 @@ fun LibraryScreen(
         query = searchQuery,
         onQueryChange = { searchQuery = it },
         placeholder = "Search mods...",
+        emptyMessage = "Nothing here. huh",
         buttons = {
             Box(contentAlignment = Alignment.TopCenter) {
                 Button(

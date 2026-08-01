@@ -20,6 +20,7 @@ val appVersion = "5.0.7"
 val changelog = """
     Allowed steamworks to close gracefully, hopefully fixing issues caused by two instances of NOMM running.
     Added 'Update All' button to the available updates window.
+    Fixed folder buttons hanging on Linux by using non-blocking platform-specific commands.
 """.trimIndent()
 
 java {

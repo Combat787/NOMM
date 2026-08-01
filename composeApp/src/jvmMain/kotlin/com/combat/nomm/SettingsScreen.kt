@@ -30,7 +30,6 @@ import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
 import io.github.vinceglb.filekit.filesDir
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.awt.Desktop
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -109,7 +108,7 @@ fun SettingsScreen() {
                     label = "Manifest Version Source URL",
                     value = currentConfig.manifestVersionUrl,
                     onValueChange = {
-                        SettingsManager.updateConfig(currentConfig.copy(manifestUrl = it))
+                        SettingsManager.updateConfig(currentConfig.copy(manifestVersionUrl = it))
                     },
                     placeholder = "",
                 )
@@ -218,28 +217,21 @@ fun SettingsScreen() {
                     label = "Open Nuclear Option Folder",
                     subLabel = "Click to open the Folder containing the Logs, Missions and Blocklist.",
                     onClick = {
-                        scope.launch {
-                            Desktop.getDesktop().open(getNuclearOptionFolder())
-                        }
+                        scope.launch { openFolder(getNuclearOptionFolder()) }
                     })
                 ClickableSettingsRow(
                     label = "Open Nuclear Option Game Folder",
                     subLabel = "Click to open the Folder containing the Game Files and BepInEx.",
                     onClick = {
-                        scope.launch {
-                            SettingsManager.config.value.gamePath?.let {
-                                Desktop.getDesktop().open(File(it))
-                            }
+                        SettingsManager.config.value.gamePath?.let {
+                            scope.launch { openFolder(File(it)) }
                         }
                     })
                 ClickableSettingsRow(
                     label = "Open Nuclear Option Mod Manager Data Folder",
                     subLabel = "Click to open the Folder containing the NOMM Data.",
                     onClick = {
-                        scope.launch {
-                            
-                            Desktop.getDesktop().open(FileKit.filesDir.file)
-                        }
+                        scope.launch { openFolder(FileKit.filesDir.file) }
                     })
             }
             Spacer(Modifier.height(8.dp))
@@ -549,5 +541,22 @@ fun SettingsTextFieldRow(
                     innerTextField()
                 }
             })
+    }
+}
+
+private fun openFolder(folder: java.io.File) {
+    if (!folder.exists()) {
+        println("[NOMM] Folder does not exist: ${folder.absolutePath}")
+        return
+    }
+    val os = System.getProperty("os.name").lowercase()
+    try {
+        when {
+            os.contains("win") -> ProcessBuilder("explorer", folder.absolutePath).start()
+            os.contains("mac") -> ProcessBuilder("open", folder.absolutePath).start()
+            else -> ProcessBuilder("xdg-open", folder.absolutePath).start()
+        }
+    } catch (e: Exception) {
+        println("[NOMM] Failed to open folder ${folder.absolutePath}: ${e.message}")
     }
 }

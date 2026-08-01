@@ -31,7 +31,9 @@ object SteamDiscovery {
             if (process != null && process.isAlive) {
                 try {
                     ipc?.sendCommand(WorkerCommand.Shutdown)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    println("[NOMM] Shutdown hook failed to send shutdown command: ${e.message}")
+                }
                 val exited = process.waitFor(3, TimeUnit.SECONDS)
                 if (!exited) {
                     println("[NOMM] Worker did not exit gracefully during shutdown hook, force killing")
@@ -245,7 +247,9 @@ object SteamDiscovery {
             process.destroyForcibly()
             try {
                 process.waitFor(2, TimeUnit.SECONDS)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                println("[NOMM] Error waiting for force-killed worker: ${e.message}")
+            }
         }
         workerProcess = null
         ipc?.close()

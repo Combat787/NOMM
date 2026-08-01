@@ -25,7 +25,9 @@ object Installer {
     fun installMod(
         modId: String, url: String, dir: File,
         hash: String?,
-        isBepInEx: Boolean = false, onSuccess: () -> Unit,
+        isBepInEx: Boolean = false,
+        onError: (Exception) -> Unit = {},
+        onSuccess: () -> Unit,
     ) {
         scope.launch {
             val currentJob = coroutineContext[Job]
@@ -63,11 +65,13 @@ object Installer {
                 }
                 throw e
             } catch (e: Exception) {
-                e.printStackTrace()
+                println("[NOMM] Install failed for $modId: ${e.message}")
+                onError(e)
                 withContext(NonCancellable + Dispatchers.IO) {
                     dir.deleteRecursively()
                 }
             } finally {
+                locks.remove(modId, mutex)
                 clearStatus(modId, isBepInEx)
             }
         }
@@ -98,7 +102,7 @@ object Installer {
                 else throw e
             }
         }
-        throw Exception("All download attempts failed")
+        throw IllegalStateException("unreachable")
     }
 
     suspend fun extract(bytes: ByteArray, url: String, target: File, noOverwrite: Boolean) {
@@ -113,7 +117,7 @@ object Installer {
                 if (archive != null) {
                     archive.use { arc ->
                         val items = arc.simpleInterface.archiveItems
-                        items.forEachIndexed { _, item ->
+                        items.forEach { item ->
                             ensureActive()
 
                             val file = File(target, item.path)

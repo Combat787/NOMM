@@ -28,7 +28,13 @@ fun getSteamPath(): String? {
     return when {
         os.contains("win") -> {
             val pb = ProcessBuilder("reg", "query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath")
-            val out = runCatching { pb.start().inputStream.bufferedReader().use { it.readText() } }.getOrElse { "" }
+            val out = runCatching {
+                val process = pb.start()
+                val text = process.inputStream.bufferedReader().use { it.readText() }
+                process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                process.destroy()
+                text
+            }.getOrElse { "" }
             "SteamPath\\s+REG_SZ\\s+(.*)".toRegex().find(out)?.groupValues?.get(1)?.trim()
         }
 
@@ -51,7 +57,18 @@ fun getNuclearOptionFolder(): File {
         }
 
         else -> {
-            File(userHome, ".local/share/Shockfront/NuclearOption")
+            // Linux: Nuclear Option runs via Steam Proton, folder is inside compatdata
+            val appId = "2168680"
+            val protonPath = "steamapps/compatdata/$appId/pfx/drive_c/users/steamuser/AppData/LocalLow/Shockfront/NuclearOption"
+
+            val steamPaths = listOf(
+                File(userHome, ".local/share/Steam/$protonPath"),
+                File(userHome, ".steam/steam/$protonPath"),
+                File(userHome, "snap/steam/common/.local/share/Steam/$protonPath"),
+                File(userHome, ".var/app/com.valvesoftware.Steam/.local/share/Steam/$protonPath"),
+            )
+
+            steamPaths.firstOrNull { it.exists() } ?: File(userHome, ".local/share/Steam/$protonPath")
         }
     }
 }

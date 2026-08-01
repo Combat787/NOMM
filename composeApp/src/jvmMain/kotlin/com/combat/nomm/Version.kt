@@ -37,6 +37,8 @@ class Version(vararg components: Int) : Comparable<Version> {
 
 }
 
+private val nonDigitRegex = "\\D+".toRegex()
+
 object VersionSerializer : KSerializer<Version> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("Version", PrimitiveKind.STRING)
@@ -48,7 +50,7 @@ object VersionSerializer : KSerializer<Version> {
     override fun deserialize(decoder: Decoder): Version {
         val string = decoder.decodeString()
         val parts = string.split('.')
-            .map { it.replace("\\D+".toRegex() ,"").toInt() }
+            .map { it.replace(nonDigitRegex, "").toInt() }
             .toIntArray()
 
         return Version(*parts)

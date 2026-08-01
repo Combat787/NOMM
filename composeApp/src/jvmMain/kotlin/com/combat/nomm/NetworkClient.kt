@@ -4,7 +4,9 @@ import dev.nucleusframework.nativehttp.ktor.installNativeSsl
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.*
+import io.ktor.client.plugins.HttpRedirect
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
@@ -26,7 +28,7 @@ object NetworkClient {
             })
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+            requestTimeoutMillis = 600_000
             connectTimeoutMillis = 30000
             socketTimeoutMillis = 30000
         }
@@ -62,7 +64,7 @@ object NetworkClient {
             val version = if (versionResponse.status.isSuccess()) {
                 json.decodeFromString<Version>(versionResponse.bodyAsText())
             } else return@runCatching null
-            if (SettingsManager.cachedManifest.value.manifest == version && !SettingsManager.config.value.ignoreManifestVersion) {
+            if (SettingsManager.cachedManifest.value.version == version && !SettingsManager.config.value.ignoreManifestVersion) {
                 return@runCatching null
             }
             SettingsManager.updateCachedManifest(SettingsManager.cachedManifest.value.copy(version = version))
@@ -75,7 +77,7 @@ object NetworkClient {
                 null
             }
         }.getOrElse { e ->
-            e.printStackTrace()
+            println("[NOMM] Failed to fetch manifest: ${e.message}")
             null
         }
     }
