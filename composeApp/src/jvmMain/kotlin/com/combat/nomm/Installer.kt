@@ -13,6 +13,10 @@ import net.sf.sevenzipjbinding.SevenZipException
 import net.sf.sevenzipjbinding.util.ByteArrayStream
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
@@ -38,6 +42,7 @@ object Installer {
             updateState(modId, TaskState(TaskState.Phase.DOWNLOADING, 0f, true, cancelAction), isBepInEx)
 
             val mutex = locks.getOrPut(modId) { Mutex() }
+            var stagingDir: File? = null
 
             try {
                 mutex.withLock {
@@ -52,25 +57,32 @@ object Installer {
 
                     updateState(modId, TaskState(TaskState.Phase.EXTRACTING, null, true, cancelAction), isBepInEx)
 
+                    stagingDir = withContext(Dispatchers.IO) {
+                        Files.createTempDirectory("nomm-install-").toFile()
+                    }
+
                     withContext(Dispatchers.IO) {
-                        if (!dir.exists()) dir.mkdirs()
-                        extract(bytes, url, dir, isBepInEx)
+                        val staging = stagingDir ?: error("Install staging directory was not created")
+                        extract(bytes, url, staging, isBepInEx)
+                        if (isBepInEx) {
+                            validateBepInExStaging(staging)
+                            mergeStagedFiles(staging, dir)
+                        } else {
+                            promoteStagedDirectory(staging, dir)
+                        }
                     }
 
                     onSuccess()
                 }
             } catch (e: CancellationException) {
-                withContext(NonCancellable + Dispatchers.IO) {
-                    dir.deleteRecursively()
-                }
                 throw e
             } catch (e: Exception) {
                 println("[NOMM] Install failed for $modId: ${e.message}")
-                onError(e)
-                withContext(NonCancellable + Dispatchers.IO) {
-                    dir.deleteRecursively()
-                }
+                runCatching { onError(e) }
             } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    stagingDir?.deleteRecursively()
+                }
                 locks.remove(modId, mutex)
                 clearStatus(modId, isBepInEx)
             }
@@ -120,7 +132,7 @@ object Installer {
                         items.forEach { item ->
                             ensureActive()
 
-                            val file = File(target, item.path)
+                            val file = resolveArchiveEntry(target, item.path)
                             if (item.isFolder) {
                                 file.mkdirs()
                             } else {
@@ -140,12 +152,105 @@ object Installer {
                     }
                 } else {
                     ensureActive()
-                    val file = File(target, url.substringAfterLast("/"))
+                    val file = resolveArchiveEntry(target, url.substringAfterLast("/"))
                     file.writeBytes(bytes)
                 }
             }
         }
     }
+
+    private fun validateBepInExStaging(stagingDir: File) {
+        if (!File(stagingDir, "BepInEx").isDirectory) {
+            throw IllegalStateException("The BepInEx archive did not contain a BepInEx directory")
+        }
+    }
+
+    private fun promoteStagedDirectory(stagingDir: File, targetDir: File) {
+        if (targetDir.exists()) {
+            throw IllegalStateException("Install target already exists: ${targetDir.absolutePath}")
+        }
+        targetDir.parentFile?.mkdirs()
+
+        try {
+            Files.move(stagingDir.toPath(), targetDir.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: Exception) {
+            try {
+                stagingDir.copyRecursively(targetDir, overwrite = false)
+                stagingDir.deleteRecursively()
+            } catch (copyError: Exception) {
+                throw copyError
+            }
+        }
+    }
+
+    private suspend fun mergeStagedFiles(stagingDir: File, targetDir: File) {
+        if (!targetDir.isDirectory) {
+            throw IllegalStateException("BepInEx target is not a directory: ${targetDir.absolutePath}")
+        }
+
+        val createdFiles = mutableListOf<Path>()
+        val createdDirectories = mutableListOf<Path>()
+
+        try {
+            stagingDir.walkTopDown().forEach { source ->
+                currentCoroutineContext().ensureActive()
+                if (source == stagingDir) return@forEach
+                if (Files.isSymbolicLink(source.toPath())) {
+                    throw SecurityException("BepInEx archive contains a symbolic link: ${source.name}")
+                }
+
+                val relativePath = stagingDir.toPath().relativize(source.toPath()).toString()
+                val destination = resolveArchiveEntry(targetDir, relativePath).toPath()
+
+                if (source.isDirectory) {
+                    if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
+                        if (Files.isSymbolicLink(destination) || !Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) {
+                            throw IllegalStateException("Cannot create BepInEx directory: $destination")
+                        }
+                    } else {
+                        createDirectories(destination, createdDirectories)
+                    }
+                } else {
+                    if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
+                        if (Files.isSymbolicLink(destination) || Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) {
+                            throw IllegalStateException("Cannot install BepInEx file: $destination")
+                        }
+                        return@forEach
+                    }
+
+                    destination.parent?.let { createDirectories(it, createdDirectories) }
+                    Files.copy(source.toPath(), destination, LinkOption.NOFOLLOW_LINKS)
+                    createdFiles.add(destination)
+                }
+            }
+        } catch (e: Exception) {
+            createdFiles.asReversed().forEach { Files.deleteIfExists(it) }
+            createdDirectories
+                .sortedByDescending { it.nameCount }
+                .forEach { Files.deleteIfExists(it) }
+            throw e
+        }
+    }
+
+    private fun createDirectories(path: Path, createdDirectories: MutableList<Path>) {
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.isSymbolicLink(path) || !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                throw IllegalStateException("Cannot create directory: $path")
+            }
+            return
+        }
+
+        val missingDirectories = mutableListOf<Path>()
+        var current = path
+        while (!Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+            missingDirectories.add(current)
+            current = current.parent ?: break
+        }
+
+        Files.createDirectories(path)
+        createdDirectories.addAll(missingDirectories)
+    }
+
     private fun updateState(id: String, state: TaskState, isBep: Boolean) {
         if (isBep) bepinexStatus.value = state
         else installStatuses.update { it + (id to state) }

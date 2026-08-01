@@ -78,18 +78,24 @@ fun SettingsScreen() {
 
             SettingsGroup(title = "Path Configuration") {
                 ClickableSettingsRow(
-                    label = "Game Folder", subLabel = currentConfig.gamePath ?: "Not Found", onClick = {
+                    label = "Game Folder",
+                    subLabel = currentConfig.gamePath?.takeIf { it.isNotBlank() } ?: "Not Found",
+                    onClick = {
                         scope.launch {
                             val directory = FileKit.openDirectoryPicker(
                                 dialogSettings = FileKitDialogSettings("Select Nuclear Option Folder")
                             )
-                            directory?.file?.path?.let { path ->
-                                val exeFile = File(path, "NuclearOption.exe")
-                                if (exeFile.exists()) SettingsManager.updateConfig(
-                                    currentConfig.copy(
-                                        gamePath = path
+                            directory?.file?.let { folder ->
+                                val error = validateNuclearOptionGameFolder(folder)
+                                if (error == null) {
+                                    SettingsManager.updateConfig(
+                                        currentConfig.copy(
+                                            gamePath = folder.absoluteFile.path
+                                        )
                                     )
-                                )
+                                } else {
+                                    reportNommError("Invalid Game Folder", error)
+                                }
                             }
                         }
                     })

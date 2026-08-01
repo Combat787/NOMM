@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -64,8 +65,23 @@ object LocalMods {
     }
 
     fun addFilesToPlugins(files: List<File>) {
-        val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
-        if (!pluginsDir.exists()) pluginsDir.mkdirs()
+        val targetError = validateNuclearOptionModTarget()
+        if (targetError != null) {
+            reportNommError("Cannot add mod files", targetError)
+            return
+        }
+
+        val bepinexFolder = SettingsManager.bepInExFolder ?: return
+        val pluginsDir = File(bepinexFolder, "plugins")
+        if (!pluginsDir.exists() && !pluginsDir.mkdirs()) {
+            reportNommError("Cannot add mod files", "Could not create ${pluginsDir.absolutePath}.")
+            return
+        }
+        val pluginsError = validateWritableDirectory(pluginsDir)
+        if (pluginsError != null) {
+            reportNommError("Cannot add mod files", pluginsError)
+            return
+        }
         files.forEach { file ->
             val destinationFile = File(pluginsDir, file.name)
             file.moveTo(destinationFile)
@@ -100,71 +116,35 @@ object LocalMods {
     fun importMods(file: PlatformFile?) {
         scope.launch {
             file?.let { platformFile ->
-                val jsonString: String? = if (file.extension == "json") {
-                    platformFile.readString()
-                } else {
-                    var modlist: String? = null
-                    val warnedMods = mutableSetOf<String>()
+                val targetError = validateNuclearOptionModTarget()
+                if (targetError != null) {
+                    reportNommError("Cannot import modpack", targetError)
+                    return@let
+                }
 
-                    ZipInputStream(file.file.inputStream()).use { zipStream ->
-                        var entry = zipStream.nextEntry
+                val bepinexFolder = SettingsManager.bepInExFolder ?: return@let
+                val pluginsDir = File(bepinexFolder, "plugins")
+                if (!pluginsDir.exists() && !pluginsDir.mkdirs()) {
+                    reportNommError("Cannot import modpack", "Could not create ${pluginsDir.absolutePath}.")
+                    return@let
+                }
+                val pluginsError = validateWritableDirectory(pluginsDir)
+                if (pluginsError != null) {
+                    reportNommError("Cannot import modpack", pluginsError)
+                    return@let
+                }
 
-                        while (entry != null) {
-                            when {
-                                entry.name.endsWith("modlist.nomm.json") -> {
-                                    if (!entry.isDirectory) {
-                                        modlist = zipStream.readBytes().decodeToString()
-                                    }
-                                }
-
-                                entry.name.startsWith("mods/") -> {
-                                    val fileName = entry.name.removePrefix("mods/")
-                                    if (fileName.isNotEmpty()) {
-                                        val rootModName = fileName.substringBefore('/')
-                                        if (warnedMods.add(rootModName)) {
-                                            suspendCancellableCoroutine { continuation ->
-                                                SettingsManager.criticalInformation.add(
-                                                    Triple(
-                                                        "Modpack includes the Local Mod $rootModName",
-                                                        "Make sure you trust the source, or remove the mod to stay safe.",
-                                                        continuation
-                                                    )
-                                                )
-                                            }
-                                        }
-
-                                        val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
-                                        val destinationFile = File(pluginsDir, fileName)
-
-                                        if (entry.isDirectory) {
-                                            destinationFile.mkdirs()
-                                        } else {
-                                            destinationFile.parentFile?.mkdirs()
-                                            if (destinationFile.exists()) destinationFile.delete()
-
-                                            destinationFile.outputStream().use { outStream ->
-                                                zipStream.copyTo(outStream)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            entry = zipStream.nextEntry
-                        }
+                val jsonString: String? = try {
+                    if (platformFile.extension == "json") {
+                        platformFile.readString()
+                    } else {
+                        importZipMods(platformFile.file, pluginsDir)
                     }
-                    refresh()
-                    modlist ?: run {
-                        suspendCancellableCoroutine { continuation ->
-                            SettingsManager.criticalInformation.add(
-                                Triple(
-                                    "Modpack does not include a Modlist.",
-                                    "Local Mods from the Modpack have been added.",
-                                    continuation
-                                )
-                            )
-                        }
-                        null
-                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    reportNommError("Modpack import failed", e.message ?: "See the terminal for details.")
+                    return@let
                 }
 
                 val imported = jsonString?.let { json.decodeFromString<List<PackageReference>>(it) }
@@ -189,15 +169,108 @@ object LocalMods {
         }
     }
 
+    private suspend fun importZipMods(file: File, pluginsDir: File): String? {
+        val stagingDir = Files.createTempDirectory("nomm-modpack-").toFile()
+        try {
+            var modlist: String? = null
+            val warnedMods = mutableSetOf<String>()
+
+            ZipInputStream(file.inputStream()).use { zipStream ->
+                var entry = zipStream.nextEntry
+
+                while (entry != null) {
+                    when {
+                        entry.name.endsWith("modlist.nomm.json") -> {
+                            if (!entry.isDirectory) {
+                                modlist = zipStream.readBytes().decodeToString()
+                            }
+                        }
+
+                        entry.name.startsWith("mods/") -> {
+                            val fileName = entry.name.removePrefix("mods/")
+                            if (fileName.isNotEmpty()) {
+                                val stagedFile = resolveArchiveEntry(stagingDir, fileName)
+                                val rootModName = fileName.substringBefore('/')
+                                if (warnedMods.add(rootModName)) {
+                                    suspendCancellableCoroutine { continuation ->
+                                        SettingsManager.criticalInformation.add(
+                                            Triple(
+                                                "Modpack includes the Local Mod $rootModName",
+                                                "Make sure you trust the source, or remove the mod to stay safe.",
+                                                continuation
+                                            )
+                                        )
+                                    }
+                                }
+
+                                if (entry.isDirectory) {
+                                    if (!stagedFile.exists() && !stagedFile.mkdirs()) {
+                                        error("Could not create staging directory for $fileName")
+                                    }
+                                } else {
+                                    stagedFile.parentFile?.mkdirs()
+                                    stagedFile.outputStream().use { outStream ->
+                                        zipStream.copyTo(outStream)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    entry = zipStream.nextEntry
+                }
+            }
+
+            applyStagedModpackFiles(stagingDir, pluginsDir)
+            refresh()
+            return modlist ?: run {
+                suspendCancellableCoroutine { continuation ->
+                    SettingsManager.criticalInformation.add(
+                        Triple(
+                            "Modpack does not include a Modlist.",
+                            "Local Mods from the Modpack have been added.",
+                            continuation
+                        )
+                    )
+                }
+                null
+            }
+        } finally {
+            stagingDir.deleteRecursively()
+        }
+    }
+
+    private fun applyStagedModpackFiles(stagingDir: File, pluginsDir: File) {
+        stagingDir.walkTopDown().forEach { source ->
+            if (source == stagingDir) return@forEach
+            if (Files.isSymbolicLink(source.toPath())) {
+                throw SecurityException("Modpack contains a symbolic link: ${source.name}")
+            }
+
+            val relativePath = stagingDir.toPath().relativize(source.toPath()).toString()
+            val destination = resolveArchiveEntry(pluginsDir, relativePath)
+            if (Files.isSymbolicLink(destination.toPath())) {
+                throw SecurityException("Cannot replace symbolic link: ${destination.absolutePath}")
+            }
+
+            if (source.isDirectory) {
+                if (!destination.exists() && !destination.mkdirs()) {
+                    error("Could not create ${destination.absolutePath}")
+                }
+            } else {
+                destination.parentFile?.mkdirs()
+                source.copyTo(destination, overwrite = true)
+            }
+        }
+    }
+
     fun loadInstalledModMetas() {
         val bepinexFolder = SettingsManager.bepInExFolder
-        if (bepinexFolder?.exists() == true) {
-            isBepInExInstalled.value = true
-        } else {
+        if (bepinexFolder == null || !isBepInExInstallationComplete(SettingsManager.gameFolder)) {
             isBepInExInstalled.value = false
             mods.update { emptyMap() }
             return
         }
+        isBepInExInstalled.value = true
 
         isGameExeFound.value = SettingsManager.gameFolder?.let { File(it, "NuclearOption.exe").exists() } ?: false
 
@@ -480,9 +553,11 @@ data class ModMeta(
         val parentId = artifact?.extends?.id
         val targetDir = if (parentId != null) {
             val parentMod = LocalMods.mods.value[parentId] ?: return false
-            File(parentMod.file, "addons/$id")
+            val parentFile = parentMod.file ?: return false
+            resolveArchiveEntry(parentFile, "addons/$id")
         } else {
-            File(SettingsManager.bepInExFolder, "plugins/${currentFile.name}")
+            val bepinexFolder = SettingsManager.bepInExFolder ?: return false
+            File(bepinexFolder, "plugins/${currentFile.name}")
         }
 
         if (currentFile.moveTo(targetDir)) {
@@ -505,7 +580,8 @@ data class ModMeta(
             }
         }
 
-        val destination = File(SettingsManager.bepInExFolder, "disabledPlugins/${currentFile.name}")
+        val bepinexFolder = SettingsManager.bepInExFolder ?: return
+        val destination = File(bepinexFolder, "disabledPlugins/${currentFile.name}")
         if (currentFile.moveTo(destination)) {
             LocalMods.updateModState(id, copy(file = destination, enabled = false))
             giveNOSMRnommpack()

@@ -36,7 +36,7 @@ data class CachedManifest(
 @Serializable
 data class Configuration(
     val theme: Theme = Theme.SYSTEM,
-    val gamePath: String? = "",
+    val gamePath: String? = null,
     val paletteStyle: PaletteStyle = PaletteStyle.Expressive,
     val contrast: Contrast = Contrast.Default,
     val fakeManifest: Boolean = false,
@@ -70,7 +70,9 @@ object SettingsManager {
     var availableUpdateInfo by mutableStateOf<UpdateInfo?>(null)
 
     val gameFolder: File?
-        get() = config.value.gamePath?.let { File(it) }
+        get() = config.value.gamePath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it).absoluteFile }
     val bepInExFolder: File?
         get() = gameFolder?.let { File(it, "BepInEx") }
 
@@ -134,4 +136,9 @@ object SettingsManager {
             (FileKit.filesDir / "manifest.json").writeString(json.encodeToString(currentCachedManifest))
         }
     }
+}
+
+fun reportNommError(title: String, message: String) {
+    println("[NOMM] $title: $message")
+    SettingsManager.criticalInformation.add(Triple(title, message, null))
 }

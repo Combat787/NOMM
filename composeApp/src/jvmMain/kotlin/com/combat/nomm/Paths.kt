@@ -97,3 +97,44 @@ internal fun getNuclearOptionFolderFromGameFolder(gameFolder: File): File? {
 
     return compatData.resolve(NUCLEAR_OPTION_PROTON_PATH).toFile()
 }
+
+fun validateNuclearOptionGameFolder(gameFolder: File?): String? {
+    if (gameFolder == null) return "The Nuclear Option game folder is not configured."
+    if (!gameFolder.isDirectory) return "The configured game folder does not exist."
+    if (!File(gameFolder, "NuclearOption.exe").isFile) {
+        return "The configured folder does not contain NuclearOption.exe."
+    }
+
+    return validateWritableDirectory(gameFolder)
+}
+
+fun validateWritableDirectory(directory: File): String? {
+    if (!directory.isDirectory) return "${directory.absolutePath} is not a directory."
+
+    var probe: java.nio.file.Path? = null
+    return try {
+        probe = Files.createTempFile(directory.toPath(), ".nomm-write-test-", ".tmp")
+        null
+    } catch (e: Exception) {
+        "NOMM cannot write to ${directory.absolutePath}: ${e.message ?: "permission denied"}"
+    } finally {
+        probe?.let { Files.deleteIfExists(it) }
+    }
+}
+
+fun validateNuclearOptionModTarget(): String? {
+    val gameFolderError = validateNuclearOptionGameFolder(SettingsManager.gameFolder)
+    if (gameFolderError != null) return gameFolderError
+
+    val bepinexFolder = SettingsManager.bepInExFolder
+    if (bepinexFolder == null || !isBepInExInstallationComplete(SettingsManager.gameFolder)) {
+        return "BepInEx is not installed in the configured game folder."
+    }
+
+    return validateWritableDirectory(bepinexFolder)
+}
+
+fun isBepInExInstallationComplete(gameFolder: File?): Boolean {
+    val bepinexFolder = gameFolder?.let { File(it, "BepInEx") } ?: return false
+    return File(bepinexFolder, "core/BepInEx.dll").isFile
+}

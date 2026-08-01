@@ -4,6 +4,9 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class PathsTest {
     @Test
@@ -26,6 +29,35 @@ class PathsTest {
             )
         } finally {
             library.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `rejects archive entries outside their destination`() {
+        val root = Files.createTempDirectory("nomm-archive-root").toFile()
+        try {
+            assertEquals(
+                File(root, "nested/mod.dll").toPath().toAbsolutePath().normalize(),
+                resolveArchiveEntry(root, "nested/mod.dll").toPath().toAbsolutePath().normalize()
+            )
+            assertFailsWith<SecurityException> { resolveArchiveEntry(root, "../outside.dll") }
+            assertFailsWith<SecurityException> { resolveArchiveEntry(root, "..\\outside.dll") }
+            assertFailsWith<SecurityException> { resolveArchiveEntry(root, "/tmp/outside.dll") }
+            assertFailsWith<SecurityException> { resolveArchiveEntry(root, "C:\\Windows\\outside.dll") }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `validates a configured writable game folder`() {
+        val gameFolder = Files.createTempDirectory("nomm-game-folder").toFile()
+        try {
+            check(File(gameFolder, "NuclearOption.exe").createNewFile())
+            assertNull(validateNuclearOptionGameFolder(gameFolder))
+            assertNotNull(validateNuclearOptionGameFolder(null))
+        } finally {
+            gameFolder.deleteRecursively()
         }
     }
 }

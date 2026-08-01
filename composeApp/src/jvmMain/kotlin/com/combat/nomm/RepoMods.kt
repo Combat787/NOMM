@@ -62,8 +62,14 @@ object RepoMods {
 
     fun downloadBepInEx() {
         val url = "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.4/BepInEx_win_x64_5.4.23.4.zip"
-        val gameFolder = SettingsManager.gameFolder ?: return
-        if (LocalMods.isBepInExInstalled.value) {
+        if (isBepInExInstallationComplete(SettingsManager.gameFolder)) {
+            return
+        }
+
+        val gameFolder = SettingsManager.gameFolder
+        val gameFolderError = validateNuclearOptionGameFolder(gameFolder)
+        if (gameFolderError != null || gameFolder == null) {
+            reportNommError("Cannot install BepInEx", gameFolderError ?: "The game folder is not configured.")
             return
         }
 
@@ -73,19 +79,31 @@ object RepoMods {
             launchOptionDialog.update { true }
         }
 
-        val configDir = File(gameFolder, "BepInEx/config")
-        configDir.mkdirs()
-        val config = File(configDir, "BepInEx.cfg")
-        config.createNewFile()
-        config.writeText(
-            """
-            [Chainloader]
-            HideManagerGameObject = true
-            """.trimIndent()
+        Installer.installMod(
+            modId = "BepInEx",
+            url = url,
+            dir = gameFolder,
+            hash = null,
+            isBepInEx = true,
+            onError = { error ->
+                reportNommError("BepInEx installation failed", error.message ?: "See the terminal for details.")
+            },
+            onSuccess = {
+                runCatching {
+                    val configDir = File(gameFolder, "BepInEx/config")
+                    configDir.mkdirs()
+                    File(configDir, "BepInEx.cfg").writeText(
+                        """
+                        [Chainloader]
+                        HideManagerGameObject = true
+                        """.trimIndent()
+                    )
+                }.onFailure { error ->
+                    reportNommError("BepInEx configuration failed", error.message ?: "Could not write BepInEx.cfg.")
+                }
+                LocalMods.refresh()
+            }
         )
-        Installer.installMod("BepInEx", url, gameFolder, null, true) {
-            LocalMods.refresh()
-        }
     }
 
     fun installMod(id: String, version: Version?, processing: MutableSet<String> = mutableSetOf()) {
@@ -124,9 +142,21 @@ object RepoMods {
     fun installMod(id: String, url: String, hash: String? = null, onSuccess: (dir: File) -> Unit = {
         
     }) {
+        val gameFolderError = validateNuclearOptionGameFolder(SettingsManager.gameFolder)
+        if (gameFolderError != null) {
+            reportNommError("Cannot install mod", gameFolderError)
+            return
+        }
+
         val bepinexFolder = SettingsManager.bepInExFolder
-        if (bepinexFolder == null || !bepinexFolder.exists()) {
+        if (!isBepInExInstallationComplete(SettingsManager.gameFolder) || bepinexFolder == null) {
             downloadBepInEx()
+            return
+        }
+
+        val bepinexFolderError = validateWritableDirectory(bepinexFolder)
+        if (bepinexFolderError != null) {
+            reportNommError("Cannot install mod", bepinexFolderError)
             return
         }
 
@@ -135,12 +165,20 @@ object RepoMods {
         val wasEnabled = installedMod?.enabled == true
         installedMod?.disable()
 
-        val disabledFolder = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
-        val dir = File(disabledFolder, id)
+        val disabledFolder = File(bepinexFolder, "disabledPlugins")
+        if (!disabledFolder.isDirectory && !disabledFolder.mkdirs()) {
+            reportNommError("Cannot install mod", "Could not create ${disabledFolder.absolutePath}.")
+            return
+        }
+        val dir = try {
+            resolveArchiveEntry(disabledFolder, id)
+        } catch (e: SecurityException) {
+            reportNommError("Cannot install mod", e.message ?: "Invalid mod id: $id")
+            return
+        }
 
-        if (dir.exists()) dir.deleteRecursively()
-        if (!dir.mkdirs()) {
-            println("[NOMM] Failed to create install directory for $id")
+        if (dir.exists() && !dir.deleteRecursively()) {
+            reportNommError("Cannot install mod", "Could not remove the previous install for $id.")
             return
         }
 
@@ -148,6 +186,7 @@ object RepoMods {
             if (wasEnabled) {
                 LocalMods.mods.value[id]?.enable()
             }
+            reportNommError("Mod installation failed", it.message ?: "See the terminal for details.")
         }) {
             onSuccess(dir)
         }
