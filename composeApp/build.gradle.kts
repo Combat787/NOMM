@@ -19,6 +19,7 @@ val appVersion = "5.0.8"
 
 val changelog = """
     Linux fixes: Path related lookups.
+    Added auto-update checks for Portable&ZIP installs.
 """.trimIndent()
 
 java {

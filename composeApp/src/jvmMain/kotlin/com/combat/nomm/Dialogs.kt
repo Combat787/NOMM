@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import dev.nucleusframework.updater.NucleusUpdater
 import dev.nucleusframework.updater.UpdateEvent
@@ -103,11 +104,12 @@ fun Dialogs() {
 
 
     SettingsManager.availableUpdateInfo?.let { info ->
-        UpdateDialog(
-            info = info,
-            updater = updater,
-            onDismiss = { SettingsManager.availableUpdateInfo = null }
-        )
+        val onDismiss = { SettingsManager.availableUpdateInfo = null }
+        if (requiresManualWindowsUpdate()) {
+            ManualUpdateDialog(info = info, onDismiss = onDismiss)
+        } else {
+            UpdateDialog(info = info, updater = updater, onDismiss = onDismiss)
+        }
     }
 
 }
@@ -118,6 +120,44 @@ suspend fun checkForUpdate() {
     if (result is UpdateResult.Available) {
         SettingsManager.availableUpdateInfo = result.info
     }
+}
+
+@Composable
+fun ManualUpdateDialog(
+    info: UpdateInfo,
+    onDismiss: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Update ${info.version} Available",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        },
+        text = {
+            Text(
+                text = "Automatic updates are not available for the Windows portable or ZIP version. " +
+                    "Download the latest release from GitHub and replace the current NOMM files.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+        confirmButton = {
+            Button(onClick = {
+                uriHandler.openUri(NOMM_LATEST_RELEASE_URL)
+                onDismiss()
+            }) {
+                Text("Take me there!")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Later")
+            }
+        },
+    )
 }
 
 @Composable
