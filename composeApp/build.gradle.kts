@@ -1,116 +1,189 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import com.codingfeline.buildkonfig.compiler.FieldSpec
+import dev.nucleusframework.desktop.application.dsl.*
+
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.composeHotReload)
+
+
+    alias(libs.plugins.nucleus)
+
+
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "3.1.0"
+val appVersion = "5.2.0"
+
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(25))
         vendor.set(JvmVendorSpec.JETBRAINS)
-    }
-}
-
-buildkonfig {
-    packageName = "com.combat.nomm"
-
-    defaultConfigs {
-        objectName = "BuildKonfig"
-        buildConfigField(com.codingfeline.buildkonfig.compiler.FieldSpec.Type.STRING, "VERSION", appVersion)
     }
 }
 
 kotlin {
     jvm()
-    jvmToolchain(21)
+    jvmToolchain(25)
     sourceSets {
-        sourceSets.all {
-            languageSettings.enableLanguageFeature("ExplicitBackingFields")
-        }
         commonMain.dependencies {
+            implementation(compose.desktop.currentOs)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
+
+            implementation(libs.nucleus.core)
+            implementation(libs.nucleus.nucleus.application)
+            implementation(libs.nucleus.decorated.window.tao)
+            implementation(libs.nucleus.window.tao)
+            implementation(libs.nucleus.window.material3)
+            implementation(libs.nucleus.darkmode)
+            implementation(libs.nucleus.taskbar)
+            implementation(libs.nucleus.updater)
+            implementation(libs.nucleus.native.http)
+            implementation(libs.nucleus.native.http.ktor)
+            implementation(libs.nucleus.aot)
+
+            implementation(libs.nucleus.notif.win)
+            implementation(libs.nucleus.notif.mac)
+            implementation(libs.nucleus.notif.linux)
+
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.coroutinesSwing)
+
             implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
-
             implementation(libs.filekit.core)
-            implementation(libs.filekit.dialogs)
             implementation(libs.filekit.dialogs.compose)
-            implementation("org.jetbrains.runtime:jbr-api:1.10.1")
 
-            implementation(libs.compose.colorpicker)
+            implementation(libs.coil)
+            implementation(libs.coil.ktor)
+
             implementation(libs.materialKolor)
-            implementation("org.slf4j:slf4j-simple:2.0.17")
-        }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-        }
-        jvmMain.dependencies {
-            implementation(compose.desktop.currentOs)
-            implementation(libs.kotlinx.coroutinesSwing)
-            implementation(libs.ktor.client.cio)
+
             implementation(libs.jetbrains.navigation3.ui)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.steamworks4j)
 
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
+            implementation("org.slf4j:slf4j-simple:2.0.17")
+        }
+
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }
 
-compose.desktop {
-    application {
-        mainClass = "com.combat.nomm.MainKt"
-        nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
+buildkonfig {
+    packageName = "com.combat.nomm"
+    defaultConfigs {
+        buildConfigField(FieldSpec.Type.STRING, "VERSION", appVersion)
+    }
+}
 
-            packageVersion = appVersion
-            packageName = "Nuclear Option Mod Manager"
-            vendor = "Combat"
-            description = "A Mod Manager For Nuclear Option"
+nucleus.application {
+    mainClass = "com.combat.nomm.MainKt"
+    jvmArgs += listOf(
+        "--enable-native-access=ALL-UNNAMED",
+    )
 
-            windows {
-                dirChooser = true
-                perUserInstall = true
-                shortcut = true
-                menu = true
-                menuGroup = "Combat"
-                iconFile = project.file("../icons/iconico.ico")
-                upgradeUuid = "fdac94b6-2774-4802-96c4-67ada2e62a57"
+    val authorEmail = "787combat787@gmail.com"
+    nativeDistributions {
+        targetFormats(
+            TargetFormat.Portable,
+            TargetFormat.AppImage,
+            TargetFormat.Msi,
+            TargetFormat.Rpm,
+            TargetFormat.Deb,
+            TargetFormat.Flatpak,
+            TargetFormat.Zip
+        )
+
+        modules(
+            "java.base", "java.desktop", "java.logging",
+            "jdk.security.auth",
+            "java.management",
+            "java.desktop",
+            "java.naming",
+            "jdk.unsupported"
+        )
+        
+        appName = "Nuclear Option Mod Manager"
+        packageName = "NOMM"
+        packageVersion = appVersion
+        vendor = "Combat"
+        description = "A Mod Manager For Nuclear Option"
+
+        artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
+
+        cleanupNativeLibs = true
+        enableAotCache = false
+        homepage = "https://github.com/Combat787/NOMM"
+        appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
+        compressionLevel = CompressionLevel.Normal
+        fileAssociation(
+            mimeType = "application/nommpack",
+            extension = "nommpack",
+            description = "A Modpack for the Nuclear Option Mod Manager",
+            linuxIconFile = project.file("icons/icon.png"),
+            windowsIconFile = project.file("icons/icon.ico"),
+            macOSIconFile = project.file("icons/icon.icns"),
+        )
+        windows {
+            upgradeUuid = "fdac94b6-2774-4802-96c4-67ada2e62a57"
+            menuGroup = "Combat"
+            shortcut = true
+            iconFile.set(project.file("icons/icon.ico"))
+            nsis {
+                runAfterFinish = true
+                deleteAppDataOnUninstall = false
+                installerIcon.set(project.file("packaging/installer.ico"))
+                uninstallerIcon.set(project.file("packaging/uninstaller.ico"))
+                license.set(project.file("LICENSE"))
             }
+        }
 
-            macOS {
-                bundleID = "com.combat.nomm"
-                iconFile = project.file("../icons/iconicns.icns")
+        linux {
+            shortcut = true
+            packageName = "NOMM"
+            appCategory = "Utility"
+            debMaintainer = "Combat <${authorEmail}>"
+            iconFile.set(project.file("icons/icon.png"))
+        }
+
+        macOS {
+            bundleID = "com.combat.nomm"
+        }
+
+        publish {
+            publishMode = PublishMode.Never
+            github {
+                enabled = true
+                owner = "Combat787"
+                repo = "NOMM"
+                token = System.getenv("GITHUB_TOKEN")
+                channel = ReleaseChannel.Latest
+                releaseType = ReleaseType.Release
             }
-
-            linux {
-                shortcut = true
-                iconFile = project.file("../icons/iconpng.png")
-            }
-
-            buildTypes.release {
-                proguard {
-                    isEnabled = false
-                    optimize = false
-                    obfuscate = false
-                }
+        }
+    }
+    buildTypes {
+        release {
+            proguard {
+                version = "7.9.1"
+                isEnabled = false
+                optimize = true
+                obfuscate.set(false)
+                joinOutputJars.set(true)
             }
         }
     }

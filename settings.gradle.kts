@@ -12,6 +12,8 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        maven("https://www.jetbrains.com/intellij-repository/releases")
+        maven("https://www.jetbrains.com/intellij-repository/snapshots")
     }
 }
 
@@ -25,6 +27,8 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        maven("https://www.jetbrains.com/intellij-repository/releases")
+        maven("https://www.jetbrains.com/intellij-repository/snapshots")
     }
 }
 

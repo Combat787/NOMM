@@ -1,28 +1,24 @@
 package com.combat.nomm
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.serialization.json.Json
 import java.io.File
 
 object RepoMods {
-    val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        prettyPrint = true
-    }
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
 
-    val mods: StateFlow<List<Extension>>
-        field = MutableStateFlow<List<Extension>>(emptyList())
+    val mods: StateFlow<Map<String, Extension>>
+        field = MutableStateFlow(emptyMap())
+
+    val latestGameVersion: StateFlow<Version?>
+        field = MutableStateFlow(null)
 
     val isLoading: StateFlow<Boolean>
         field = MutableStateFlow(false)
@@ -33,18 +29,46 @@ object RepoMods {
 
     fun fetchManifest() {
         scope.launch {
-            if (!mutex.tryLock()) return@launch
+            if (!mutex.tryLock()) {
+                println("[NOMM] Manifest fetch already in progress, skipping")
+                return@launch
+            }
             try {
                 isLoading.value = true
                 val fetched = if (SettingsManager.config.value.fakeManifest) {
                     fetchFakeManifest()
                 } else {
-                    NetworkClient.fetchManifest(SettingsManager.config.value.manifestUrl) ?: SettingsManager.config.value.cachedManifest
+                    NetworkClient.fetchManifest() ?: SettingsManager.cachedManifest.value.manifest
                 }
-                mods.value = fetched
+                mods.value = fetched.distinctBy { it.id }.associateBy { it.id }
+                latestGameVersion.value = fetched.latestGameVersion()
+                ServerBrowser.modHashLookup = buildModHashLookup(mods.value.map { it.value })
             } finally {
                 isLoading.value = false
                 mutex.unlock()
+            }
+            val updatable = LocalMods.mods.value.filter { it.value.hasUpdate }
+                .mapNotNull { mods.value[it.key] }
+            if (updatable.isNotEmpty() && !SettingsManager.config.value.ignoreNewUpdates) {
+                val hasExistingUpdateNotification = SettingsManager.criticalInformation.any {
+                    it.first.contains("Available Mod Update")
+                }
+                if (!hasExistingUpdateNotification) {
+                    SettingsManager.criticalInformation.add(
+                        Triple(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append("${updatable.size}")
+                                }
+                                append("Available Mod Update${if (updatable.size > 1) "s" else ""}")
+                            },
+                            buildAnnotatedString {
+                                updatable.joinToString(separator = "\n") { it.displayName }
+                            },
+                            null
+                        )
+                    )
+                }
             }
         }
     }
@@ -53,8 +77,14 @@ object RepoMods {
 
     fun downloadBepInEx() {
         val url = "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.4/BepInEx_win_x64_5.4.23.4.zip"
-        val gameFolder = SettingsManager.gameFolder ?: return
-        if (LocalMods.isBepInExInstalled.value) {
+        if (isBepInExInstallationComplete(SettingsManager.gameFolder)) {
+            return
+        }
+
+        val gameFolder = SettingsManager.gameFolder
+        val gameFolderError = validateNuclearOptionGameFolder(gameFolder)
+        if (gameFolderError != null || gameFolder == null) {
+            reportNommError("Cannot install BepInEx", gameFolderError ?: "The game folder is not configured.")
             return
         }
 
@@ -64,30 +94,38 @@ object RepoMods {
             launchOptionDialog.update { true }
         }
 
-        val configDir = File(gameFolder, "BepInEx/config")
-        configDir.mkdirs()
-        val config = File(configDir, "BepInEx.cfg")
-        config.createNewFile()
-        config.writeText("""
-            [Chainloader]
-            HideManagerGameObject = true
-            """.trimIndent())
-        Installer.installMod("BepInEx", url, gameFolder, true) {
-            LocalMods.refresh()
-        }
+        Installer.installMod(
+            modId = "BepInEx",
+            url = url,
+            dir = gameFolder,
+            hash = null,
+            isBepInEx = true,
+            onError = { error ->
+                reportNommError("BepInEx installation failed", error.message ?: "See the terminal for details.")
+            },
+            onSuccess = {
+                runCatching {
+                    val configDir = File(gameFolder, "BepInEx/config")
+                    configDir.mkdirs()
+                    File(configDir, "BepInEx.cfg").writeText(
+                        """
+                        [Chainloader]
+                        HideManagerGameObject = true
+                        """.trimIndent()
+                    )
+                }.onFailure { error ->
+                    reportNommError("BepInEx configuration failed", error.message ?: "Could not write BepInEx.cfg.")
+                }
+                LocalMods.refresh()
+            }
+        )
     }
 
     fun installMod(id: String, version: Version?, processing: MutableSet<String> = mutableSetOf()) {
-        val bepinexFolder = SettingsManager.bepInExFolder
-        if (bepinexFolder == null || !bepinexFolder.exists()) {
-            downloadBepInEx()
-            return
-        }
-
         if (id in processing) return
         processing.add(id)
 
-        val extension = mods.value.find { it.id == id } ?: return
+        val extension = mods.value[id] ?: return
         val targetArtifact = version?.let { v -> extension.artifacts.find { it.version == v } }
             ?: extension.artifacts.maxByOrNull { it.version }
             ?: return
@@ -109,16 +147,73 @@ object RepoMods {
         if (dir.exists()) dir.deleteRecursively()
 
         Installer.installMod(extension.id, targetArtifact.downloadUrl, dir) {
+        installMod(extension.id, targetArtifact.downloadUrl, targetArtifact.hash) { dir ->
             val metaData = ModMeta(
-                id = extension.id,
+                id = id,
                 artifact = targetArtifact,
             )
 
             runCatching {
                 File(dir, "meta.json").writeText(json.encodeToString(metaData))
                 LocalMods.refresh()
-                LocalMods.mods.value[extension.id]?.enable()
+                LocalMods.mods.value[id]?.enable()
             }
+        }
+    }
+
+
+    fun installMod(
+        id: String, url: String, hash: String? = null, onSuccess: (dir: File) -> Unit = {
+
+        }
+    ) {
+        val gameFolderError = validateNuclearOptionGameFolder(SettingsManager.gameFolder)
+        if (gameFolderError != null) {
+            reportNommError("Cannot install mod", gameFolderError)
+            return
+        }
+
+        val bepinexFolder = SettingsManager.bepInExFolder
+        if (!isBepInExInstallationComplete(SettingsManager.gameFolder) || bepinexFolder == null) {
+            downloadBepInEx()
+            return
+        }
+
+        val bepinexFolderError = validateWritableDirectory(bepinexFolder)
+        if (bepinexFolderError != null) {
+            reportNommError("Cannot install mod", bepinexFolderError)
+            return
+        }
+
+
+        val installedMod = LocalMods.mods.value[id]
+        val wasEnabled = installedMod?.enabled == true
+        installedMod?.disable()
+
+        val disabledFolder = File(bepinexFolder, "disabledPlugins")
+        if (!disabledFolder.isDirectory && !disabledFolder.mkdirs()) {
+            reportNommError("Cannot install mod", "Could not create ${disabledFolder.absolutePath}.")
+            return
+        }
+        val dir = try {
+            resolveArchiveEntry(disabledFolder, id)
+        } catch (e: SecurityException) {
+            reportNommError("Cannot install mod", e.message ?: "Invalid mod id: $id")
+            return
+        }
+
+        if (dir.exists() && !dir.deleteRecursively()) {
+            reportNommError("Cannot install mod", "Could not remove the previous install for $id.")
+            return
+        }
+
+        Installer.installMod(id, url, dir, hash, onError = {
+            if (wasEnabled) {
+                LocalMods.mods.value[id]?.enable()
+            }
+            reportNommError("Mod installation failed", it.message ?: "See the terminal for details.")
+        }) {
+            onSuccess(dir)
         }
     }
 }

@@ -1,32 +1,32 @@
 package com.combat.nomm
 
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.dialogs.FileKitMode
-import io.github.vinceglb.filekit.dialogs.FileKitType
-import io.github.vinceglb.filekit.dialogs.openFilePicker
-import io.github.vinceglb.filekit.dialogs.openFileSaver
-import io.github.vinceglb.filekit.readString
-import io.github.vinceglb.filekit.writeString
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import io.github.vinceglb.filekit.*
+import io.github.vinceglb.filekit.dialogs.*
+import io.github.vinceglb.filekit.utils.toKotlinxIoPath
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 
 object LocalMods {
-    val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        prettyPrint = true
-    }
     val isBepInExInstalled: StateFlow<Boolean>
         field = MutableStateFlow(false)
 
@@ -36,31 +36,54 @@ object LocalMods {
     val mods: StateFlow<Map<String, ModMeta>>
         field = MutableStateFlow(emptyMap())
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val protectedIds = setOf("NOMM-Integration", "NOSMR")
 
-    init {
-        loadInstalledModMetas()
-    }
+    internal var nosmrExportJob: Job? = null
+
+    @Volatile
+    private var refreshInProgress = false
+
 
     fun exportMods() {
         scope.launch {
-            val exportData = json.encodeToString(
-                mods.value.filter { it.value.enabled == true }
-                    .map { PackageReference(it.value.id, it.value.artifact?.version) }
-            )
+            val currentInstant = Clock.System.now()
+            val dt = currentInstant.toLocalDateTime(TimeZone.currentSystemDefault())
+
+            val year = dt.year
+            val month = dt.month.number.toString().padStart(2, '0')
+            val day = dt.day.toString().padStart(2, '0')
+            val hour = dt.hour.toString().padStart(2, '0')
+            val minute = dt.minute.toString().padStart(2, '0')
+            val second = dt.second.toString().padStart(2, '0')
 
             val file = FileKit.openFileSaver(
-                suggestedName = "modpack",
-                extension = "nomm.json"
+                suggestedName = "${year}-${month}-${day}_${hour}-${minute}-${second}",
+                defaultExtension = "nommpack",
+                directory = null,
+                dialogSettings = FileKitDialogSettings.createDefault()
             )
-
-            file?.writeString(exportData)
+            exportMods(file)
         }
     }
 
     fun addFilesToPlugins(files: List<File>) {
-        val pluginsDir = File(SettingsManager.bepInExFolder, "plugins")
-        if (!pluginsDir.exists()) pluginsDir.mkdirs()
+        val targetError = validateNuclearOptionModTarget()
+        if (targetError != null) {
+            reportNommError("Cannot add mod files", targetError)
+            return
+        }
+
+        val bepinexFolder = SettingsManager.bepInExFolder ?: return
+        val pluginsDir = File(bepinexFolder, "plugins")
+        if (!pluginsDir.exists() && !pluginsDir.mkdirs()) {
+            reportNommError("Cannot add mod files", "Could not create ${pluginsDir.absolutePath}.")
+            return
+        }
+        val pluginsError = validateWritableDirectory(pluginsDir)
+        if (pluginsError != null) {
+            reportNommError("Cannot add mod files", pluginsError)
+            return
+        }
         files.forEach { file ->
             val destinationFile = File(pluginsDir, file.name)
             file.moveTo(destinationFile)
@@ -72,7 +95,7 @@ object LocalMods {
         scope.launch {
             val files = FileKit.openFilePicker(
                 mode = FileKitMode.Multiple(),
-                title = "Add From Files",
+                dialogSettings = FileKitDialogSettings("Add From Files"),
             )
 
             if (!files.isNullOrEmpty()) {
@@ -84,48 +107,184 @@ object LocalMods {
     fun importMods() {
         scope.launch {
             val file = FileKit.openFilePicker(
-                title = "Import Modpack",
-                type = FileKitType.File(extension = "nomm.json"),
+                dialogSettings = FileKitDialogSettings("Import Modpack"),
+                type = FileKitType.File("nomm.json", "nommpack"),
             )
 
+            importMods(file)
+        }
+    }
+
+    fun importMods(file: PlatformFile?) {
+        scope.launch {
             file?.let { platformFile ->
-                try {
-                    val jsonString = platformFile.readString()
-                    val imported: List<PackageReference> = json.decodeFromString(jsonString)
-
-                    RepoMods.fetchManifest()
-                    imported.forEach {
-                        mods.value[it.id] ?: run {
-                            RepoMods.installMod(it.id, it.version)
-                        }
-                    }
-                    val importedIds = imported.map { it.id }
-                    mods.value.forEach { (_, meta) ->
-                        if (importedIds.contains(meta.id)) {
-                            meta.enable()
-                        } else {
-                            meta.disable()
-                        }
-                    }
-
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                val targetError = validateNuclearOptionModTarget()
+                if (targetError != null) {
+                    reportNommError("Cannot import modpack", targetError)
+                    return@let
                 }
+
+                val bepinexFolder = SettingsManager.bepInExFolder ?: return@let
+                val pluginsDir = File(bepinexFolder, "plugins")
+                if (!pluginsDir.exists() && !pluginsDir.mkdirs()) {
+                    reportNommError("Cannot import modpack", "Could not create ${pluginsDir.absolutePath}.")
+                    return@let
+                }
+                val pluginsError = validateWritableDirectory(pluginsDir)
+                if (pluginsError != null) {
+                    reportNommError("Cannot import modpack", pluginsError)
+                    return@let
+                }
+
+                val jsonString: String? = try {
+                    if (platformFile.extension == "json") {
+                        platformFile.readString()
+                    } else {
+                        importZipMods(platformFile.file, pluginsDir)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    reportNommError("Modpack import failed", e.message ?: "See the terminal for details.")
+                    return@let
+                }
+
+                val imported = jsonString?.let { json.decodeFromString<List<PackageReference>>(it) }
+
+                RepoMods.fetchManifest()
+                imported?.forEach {
+                    mods.value[it.id] ?: run {
+                        RepoMods.installMod(it.id, it.version)
+                    }
+                }
+
+                val importedIds = imported?.map { it.id }
+                mods.value.forEach { (_, meta) ->
+                    if (meta.id in protectedIds) return@forEach
+                    if (importedIds?.contains(meta.id) == true) {
+                        meta.enable()
+                    } else {
+                        meta.disable()
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun importZipMods(file: File, pluginsDir: File): String? {
+        val stagingDir = withContext(Dispatchers.IO) {
+            Files.createTempDirectory("nomm-modpack-")
+        }.toFile()
+        try {
+            var modlist: String? = null
+            val warnedMods = mutableSetOf<String>()
+
+            ZipInputStream(file.inputStream()).use { zipStream ->
+                var entry = zipStream.nextEntry
+
+                while (entry != null) {
+                    when {
+                        entry.name.endsWith("modlist.nomm.json") -> {
+                            if (!entry.isDirectory) {
+                                modlist = zipStream.readBytes().decodeToString()
+                            }
+                        }
+
+                        entry.name.startsWith("mods/") -> {
+                            val fileName = entry.name.removePrefix("mods/")
+                            if (fileName.isNotEmpty()) {
+                                val stagedFile = resolveArchiveEntry(stagingDir, fileName)
+                                val rootModName = fileName.substringBefore('/')
+                                if (warnedMods.add(rootModName)) {
+                                    suspendCancellableCoroutine { continuation ->
+                                        SettingsManager.criticalInformation.add(
+                                            Triple(
+                                                buildAnnotatedString {
+                                                    append("Modpack includes the Local Mod ")
+
+                                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                                        append(
+                                                            rootModName
+                                                        )
+                                                    }
+                                                },
+                                                buildAnnotatedString { append("Make sure you trust the source, or remove the mod to stay safe.") },
+                                                continuation
+                                            )
+                                        )
+                                    }
+                                }
+
+                                if (entry.isDirectory) {
+                                    if (!stagedFile.exists() && !stagedFile.mkdirs()) {
+                                        error("Could not create staging directory for $fileName")
+                                    }
+                                } else {
+                                    stagedFile.parentFile?.mkdirs()
+                                    stagedFile.outputStream().use { outStream ->
+                                        zipStream.copyTo(outStream)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    entry = zipStream.nextEntry
+                }
+            }
+
+            applyStagedModpackFiles(stagingDir, pluginsDir)
+            refresh()
+            return modlist ?: run {
+                suspendCancellableCoroutine { continuation ->
+                    SettingsManager.criticalInformation.add(
+                        Triple(
+                            buildAnnotatedString { append("Modpack does not include a Modlist.") },
+                            buildAnnotatedString { append("Local Mods from the Modpack have been added.") },
+                            continuation
+                        )
+                    )
+                }
+                null
+            }
+        } finally {
+            stagingDir.deleteRecursively()
+        }
+    }
+
+    private fun applyStagedModpackFiles(stagingDir: File, pluginsDir: File) {
+        stagingDir.walkTopDown().forEach { source ->
+            if (source == stagingDir) return@forEach
+            if (Files.isSymbolicLink(source.toPath())) {
+                throw SecurityException("Modpack contains a symbolic link: ${source.name}")
+            }
+
+            val relativePath = stagingDir.toPath().relativize(source.toPath()).toString()
+            val destination = resolveArchiveEntry(pluginsDir, relativePath)
+            if (Files.isSymbolicLink(destination.toPath())) {
+                throw SecurityException("Cannot replace symbolic link: ${destination.absolutePath}")
+            }
+
+            if (source.isDirectory) {
+                if (!destination.exists() && !destination.mkdirs()) {
+                    error("Could not create ${destination.absolutePath}")
+                }
+            } else {
+                destination.parentFile?.mkdirs()
+                source.copyTo(destination, overwrite = true)
             }
         }
     }
 
     fun loadInstalledModMetas() {
         val bepinexFolder = SettingsManager.bepInExFolder
-        if (bepinexFolder?.exists() == true) {
-            isBepInExInstalled.value = true
-        } else {
+        if (bepinexFolder == null || !isBepInExInstallationComplete(SettingsManager.gameFolder)) {
             isBepInExInstalled.value = false
             mods.update { emptyMap() }
             return
         }
+        isBepInExInstalled.value = true
 
-        isGameExeFound.value = File(SettingsManager.gameFolder, "NuclearOption.exe").exists()
+        isGameExeFound.value = SettingsManager.gameFolder?.let { File(it, "NuclearOption.exe").exists() } ?: false
 
         val plugins = File(bepinexFolder, "plugins").apply { mkdirs() }
         val disabled = File(bepinexFolder, "disabledPlugins").apply { mkdirs() }
@@ -140,7 +299,7 @@ object LocalMods {
 
                 val metaJson = if (file.isDirectory) File(file, "meta.json") else null
                 val meta = if (metaJson?.exists() == true) {
-                    runCatching { RepoMods.json.decodeFromString<ModMeta>(metaJson.readText()) }.getOrNull()
+                    runCatching { json.decodeFromString<ModMeta>(metaJson.readText()) }.getOrNull()
                 } else null
 
                 val id = meta?.id ?: file.nameWithoutExtension
@@ -187,7 +346,7 @@ object LocalMods {
     fun recalculateAllProblems() {
         mods.update { current ->
             current.mapValues { (_, meta) ->
-                val repoMod = RepoMods.mods.value.find { it.id == meta.id }
+                val repoMod = RepoMods.mods.value[meta.id]
                 val artifact = repoMod?.artifacts?.maxByOrNull { it.version }
                 val hasUpdate =
                     if (artifact == null) false else meta.artifact?.version?.let { it < artifact.version } ?: true
@@ -211,8 +370,110 @@ object LocalMods {
     }
 
     fun refresh() {
-        loadInstalledModMetas()
+        if (refreshInProgress) return
+        refreshInProgress = true
+        try {
+            loadInstalledModMetas()
+            RepoMods.fetchManifest()
+
+            val ver = Version(1, 2, 5)
+            val id = "NOSMR"
+            val downloadUrl = "https://github.com/RaylaValdez/NOSMR/releases/download/v1.2.5/NOSMR.dll"
+            val hash = "sha256:8248fc1bf5d02ddbc38d2c8aafddca68a2669bdc2dc10c706d1206585319dccd"
+
+
+            val installedMod = mods.value[id]
+            if (installedMod != null) {
+                val currentVersion = installedMod.artifact?.version
+                if (currentVersion == ver) return
+            }
+
+
+            RepoMods.installMod(
+                id,
+                downloadUrl,
+                hash
+            ) { dir ->
+                val metaData = ModMeta(
+                    id = id,
+                    artifact = Artifact(
+                        version = ver,
+                        downloadUrl = downloadUrl
+                    ),
+                )
+
+                runCatching {
+                    File(dir, "meta.json").writeText(json.encodeToString(metaData))
+                    LocalMods.refresh()
+                    if (SettingsManager.config.value.nosmr) {
+                        LocalMods.mods.value[id]?.enable()
+                    } else {
+                        LocalMods.mods.value[id]?.disable()
+                    }
+                }
+            }
+        } finally {
+            refreshInProgress = false
+        }
     }
+
+    fun enableAll() {
+        mods.value.forEach { (_, meta) ->
+            meta.enable()
+        }
+    }
+
+    fun disableAll() {
+        mods.value.forEach { (_, meta) ->
+            if (meta.id in protectedIds) return@forEach
+            meta.disable()
+        }
+    }
+
+    fun updateAll() {
+        mods.value.forEach { (_, meta) ->
+            meta.update()
+        }
+    }
+}
+
+suspend fun exportMods(file: PlatformFile?) {
+    val byteStream = ByteArrayOutputStream()
+    ZipOutputStream(byteStream).use { zipStream ->
+        val modList = json.encodeToString(
+            LocalMods.mods.value.filter { it.value.enabled == true }
+                .map { PackageReference(it.value.id, it.value.artifact?.version) }
+        )
+        zipStream.putNextEntry(ZipEntry("modlist.nomm.json"))
+        zipStream.write(modList.toByteArray())
+        zipStream.closeEntry()
+
+        LocalMods.mods.value
+            .asSequence()
+            .filter { it.value.enabled == true }
+            .filter { it.value.isUnidentified }.mapNotNull { it.value.file }
+            .filter { it.exists() }
+            .toList()
+            .forEach { modFile ->
+                if (modFile.isDirectory) {
+                    modFile.walkTopDown().forEach { file ->
+                        val relativePath = file.relativeTo(modFile.parentFile).path.replace('\\', '/')
+                        if (file.isDirectory) {
+                            zipStream.putNextEntry(ZipEntry("mods/$relativePath/"))
+                        } else {
+                            zipStream.putNextEntry(ZipEntry("mods/$relativePath"))
+                            file.inputStream().use { fileStream -> fileStream.copyTo(zipStream) }
+                        }
+                        zipStream.closeEntry()
+                    }
+                } else {
+                    zipStream.putNextEntry(ZipEntry("mods/${modFile.name}"))
+                    modFile.inputStream().use { fileStream -> fileStream.copyTo(zipStream) }
+                    zipStream.closeEntry()
+                }
+            }
+    }
+    file?.write(byteStream.toByteArray())
 }
 
 @Serializable
@@ -274,7 +535,21 @@ data class ModMeta(
         LocalMods.refresh()
     }
 
-    fun enable(): Boolean {
+    fun giveNOSMRnommpack() {
+        LocalMods.nosmrExportJob?.cancel()
+        LocalMods.nosmrExportJob = scope.launch {
+            delay(500.milliseconds)
+            val file = LocalMods.mods.value["NOSMR"]?.file?.toKotlinxIoPath()?.let {
+                PlatformFile(it)
+            } ?: return@launch
+            val modpacks = file / "modpacks"
+            modpacks.createDirectories()
+            exportMods(modpacks / "current.nommpack")
+        }
+    }
+
+    fun enable(visited: MutableSet<String> = mutableSetOf()): Boolean {
+        if (!visited.add(id)) return true
         val currentSelf = LocalMods.mods.value[id] ?: this
         val currentFile = currentSelf.file ?: return false
         if (currentSelf.enabled == true && currentFile.exists()) return true
@@ -282,7 +557,7 @@ data class ModMeta(
         artifact?.extends?.id?.let { parentId ->
             val parentMod = LocalMods.mods.value[parentId] ?: return false
             if (parentMod.enabled != true) {
-                val success = parentMod.enable()
+                val success = parentMod.enable(visited)
                 if (!success) return false
             }
         }
@@ -290,32 +565,38 @@ data class ModMeta(
         val parentId = artifact?.extends?.id
         val targetDir = if (parentId != null) {
             val parentMod = LocalMods.mods.value[parentId] ?: return false
-            File(parentMod.file, "addons/$id")
+            val parentFile = parentMod.file ?: return false
+            resolveArchiveEntry(parentFile, "addons/$id")
         } else {
-            File(SettingsManager.bepInExFolder, "plugins/${currentFile.name}")
+            val bepinexFolder = SettingsManager.bepInExFolder ?: return false
+            File(bepinexFolder, "plugins/${currentFile.name}")
         }
 
         if (currentFile.moveTo(targetDir)) {
             LocalMods.updateModState(id, copy(file = targetDir, enabled = true))
+            giveNOSMRnommpack()
             return true
         }
         return false
     }
 
-    fun disable() {
+    fun disable(visited: MutableSet<String> = mutableSetOf()) {
+        if (!visited.add(id)) return
         val currentSelf = LocalMods.mods.value[id] ?: this
         val currentFile = currentSelf.file ?: return
         if (currentSelf.enabled == false || !currentFile.exists()) return
 
         LocalMods.mods.value.values.forEach { other ->
             if (other.artifact?.extends?.id == id && other.enabled == true) {
-                other.disable()
+                other.disable(visited)
             }
         }
 
-        val destination = File(SettingsManager.bepInExFolder, "disabledPlugins/${currentFile.name}")
+        val bepinexFolder = SettingsManager.bepInExFolder ?: return
+        val destination = File(bepinexFolder, "disabledPlugins/${currentFile.name}")
         if (currentFile.moveTo(destination)) {
             LocalMods.updateModState(id, copy(file = destination, enabled = false))
+            giveNOSMRnommpack()
         }
     }
 

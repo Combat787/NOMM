@@ -1,12 +1,20 @@
 package com.combat.nomm
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.window.WindowPlacement
 import com.materialkolor.Contrast
 import com.materialkolor.PaletteStyle
+import dev.nucleusframework.updater.UpdateInfo
+import io.github.vinceglb.filekit.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.serialization.Serializable
 import java.io.File
+import kotlin.coroutines.Continuation
+import kotlin.time.Duration.Companion.seconds
 
 @Serializable
 enum class Theme {
@@ -20,55 +28,132 @@ enum class Theme {
 }
 
 @Serializable
+data class CachedManifest(
+    val version: Version = Version(0),
+    val manifest: Manifest = emptyList(),
+)
+
+
+@Serializable
 data class Configuration(
     val theme: Theme = Theme.SYSTEM,
-    val gamePath: String? = "",
+    val gamePath: String? = null,
     val paletteStyle: PaletteStyle = PaletteStyle.Expressive,
     val contrast: Contrast = Contrast.Default,
     val fakeManifest: Boolean = false,
     val allowProxyDownloadWithoutSslCertification: Boolean = false,
     val manifestUrl: String = "https://kopterbuzz.github.io/NOMNOM/manifest/manifest.json",
-    val cachedManifest: Manifest = emptyList(),
-    val hueValue: Float = 0.3f,
+    val manifestVersionUrl: String = "https://kopterbuzz.github.io/NOMNOM/manifest/version.json",
+    val ignoreManifestVersion: Boolean = false,
+    val ignoreHashMismatch: Boolean = false,
+    val ignoreNewUpdates: Boolean = false,
+    val nosmr: Boolean = true,
+    val steamworks: Boolean = true,
+    val seedColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val customScheme: Boolean = false,
+    val primaryColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val secondaryColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val tertiaryColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val neutralColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val neutralVariantColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val errorColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val placement: WindowPlacement = WindowPlacement.Floating,
 ) {
-    val themeColor: Color
-        get() = Color.hsv(hueValue * 360f, 1f, 1f)
+
+
 }
 
+@OptIn(FlowPreview::class)
 object SettingsManager {
-    val config: State<Configuration>
-        field = mutableStateOf(load())
+    val saveSignal = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
 
-    val gameFolder: File? = config.value.gamePath?.let { File(it) }
+    val config: State<Configuration>
+        field = mutableStateOf(loadConfiguration())
+
+    val cachedManifest: State<CachedManifest>
+        field = mutableStateOf(loadCachedManifest())
+
+
+    val criticalInformation = mutableStateListOf<Triple<AnnotatedString, AnnotatedString, Continuation<Unit>?>>()
+
+    var availableUpdateInfo by mutableStateOf<UpdateInfo?>(null)
+
+    val gameFolder: File?
+        get() = config.value.gamePath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it).absoluteFile }
     val bepInExFolder: File?
         get() = gameFolder?.let { File(it, "BepInEx") }
 
-
-    private fun load(): Configuration {
-        return if (DataStorage.configFile.exists() && DataStorage.configFile.length() > 0) {
+    fun loadCachedManifest(): CachedManifest = runBlocking {
+        if ((FileKit.filesDir / "manifest.json").exists()) {
             try {
-                DataStorage.json.decodeFromString<Configuration>(DataStorage.configFile.readText())
+                return@runBlocking json.decodeFromString<CachedManifest>((FileKit.filesDir / "manifest.json").readString())
             } catch (_: Exception) {
-                createDefaultConfig()
             }
-        } else {
-            createDefaultConfig()
+        }
+        CachedManifest()
+    }
+
+
+    fun loadConfiguration(): Configuration = runBlocking {
+        if ((FileKit.filesDir / "config.json").exists()) {
+            try {
+                return@runBlocking json.decodeFromString<Configuration>((FileKit.filesDir / "config.json").readString())
+            } catch (_: Exception) {
+            }
+        }
+
+        val path = getGameFolder("Nuclear Option", "NuclearOption.exe")?.path
+        val default = Configuration(gamePath = path)
+        saveSignal.tryEmit(Unit)
+        default
+    }
+
+    init {
+        scope.launch(Dispatchers.IO) {
+            saveSignal
+                .debounce(5.seconds)
+                .collect {
+                    saveConfig()
+                }
         }
     }
 
-    private fun createDefaultConfig(): Configuration {
-        val path = getGameFolder("Nuclear Option", "NuclearOption.exe")?.path
-        val default = Configuration(gamePath = path)
-        save(default)
-        return default
+    fun updateCachedManifest(newCachedManifest: CachedManifest) {
+        cachedManifest.value = newCachedManifest
+        scope.launch {
+            saveCachedManifest()
+        }
     }
 
     fun updateConfig(newConfig: Configuration) {
         config.value = newConfig
-        save(newConfig)
+        saveSignal.tryEmit(Unit)
     }
 
-    private fun save(config: Configuration) {
-        DataStorage.configFile.writeText(DataStorage.json.encodeToString(config))
+    suspend fun saveConfig() {
+        withContext(Dispatchers.IO) {
+            val currentConfig = config.value
+            (FileKit.filesDir / "config.json").writeString(json.encodeToString(currentConfig))
+        }
     }
+
+    suspend fun saveCachedManifest() {
+        withContext(Dispatchers.IO) {
+            val currentCachedManifest = cachedManifest.value
+            (FileKit.filesDir / "manifest.json").writeString(json.encodeToString(currentCachedManifest))
+        }
+    }
+}
+
+fun reportNommError(title: String, message: String) {
+    println("[NOMM] $title: $message")
+    SettingsManager.criticalInformation.add(
+        Triple(
+            buildAnnotatedString { append(title) },
+            buildAnnotatedString { append(message) },
+            null
+        )
+    )
 }

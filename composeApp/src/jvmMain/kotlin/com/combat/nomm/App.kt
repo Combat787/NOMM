@@ -3,6 +3,7 @@ package com.combat.nomm
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -17,6 +18,11 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -31,118 +37,107 @@ import nuclearoptionmodmanager.composeapp.generated.resources.close_24px
 import nuclearoptionmodmanager.composeapp.generated.resources.warning_24px
 import org.jetbrains.compose.resources.painterResource
 import java.awt.datatransfer.StringSelection
+import kotlinx.coroutines.flow.MutableStateFlow
 
-const val appName = "Nuclear Option Mod Manager"
 
-private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+val version = json.decodeFromString<Version>(BuildKonfig.VERSION)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
+val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+val currentScreen = MutableStateFlow<MainNavigation>(MainNavigation.Search)
+
 @Composable
 fun App() {
     val backStack = rememberNavBackStack(MainNavigation.config, MainNavigation.Search)
     val currentKey = backStack.lastOrNull() ?: MainNavigation.Search
 
-        
-    
-        Surface(
-            color = MaterialTheme.colorScheme.background 
-        ) {
-            Box {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+    LaunchedEffect(currentKey) {
+        (currentKey as? MainNavigation)?.let { currentScreen.value = it }
+    }
 
-                    ) {
-                    MainNavigationRail(currentKey, backStack)
-                    VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 16.dp))
-                    NavDisplay(
-                        modifier = Modifier.fillMaxHeight().weight(1f),
-                        backStack = backStack,
-                        onBack = { backStack.removeLastOrNull() },
-                        transitionSpec = {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        },
-                        popTransitionSpec = {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        },
-                        predictivePopTransitionSpec = {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        },
-                        entryProvider = entryProvider {
-                            entry<MainNavigation.Search> {
-                                SearchScreen(
-                                    onNavigateToMod = { modId ->
-                                        if (RepoMods.mods.value.any { it.id == modId }) {
-                                            backStack.add(MainNavigation.Mod(modId))
-                                        }
-                                    }
-                                )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+
+            ) {
+            MainNavigationRail(currentKey, backStack)
+            VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 16.dp))
+            NavDisplay(
+                modifier = Modifier.fillMaxHeight().weight(1f),
+                backStack = backStack,
+                onBack = { backStack.removeLastOrNull() },
+                transitionSpec = {
+                    EnterTransition.None togetherWith ExitTransition.None
+                },
+                popTransitionSpec = {
+                    EnterTransition.None togetherWith ExitTransition.None
+                },
+                predictivePopTransitionSpec = {
+                    EnterTransition.None togetherWith ExitTransition.None
+                },
+                entryProvider = entryProvider {
+                    entry<MainNavigation.Search> {
+                        SearchScreen(
+                            onNavigateToMod = { modId ->
+                                if (RepoMods.mods.value[modId] != null) {
+                                    backStack.add(MainNavigation.Mod(modId))
+                                }
                             }
-                            entry<MainNavigation.Libraries> {
-                                LibraryScreen(
-                                    onOpenMod = { targetId ->
-                                        if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.config.value.cachedManifest.any { it.id == targetId }) {
-                                            backStack.add(MainNavigation.Mod(targetId))
-                                        }
-                                    }
-                                )
+                        )
+                    }
+                    entry<MainNavigation.Libraries> {
+                        LibraryScreen(
+                            onOpenMod = { targetId ->
+                                if (RepoMods.mods.value[targetId] != null || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                    backStack.add(MainNavigation.Mod(targetId))
+                                }
                             }
-                            entry<MainNavigation.Settings> {
-                                SettingsScreen()
+                        )
+                    }
+                    entry<MainNavigation.Servers> {
+                        ServerBrowserScreen(
+                            onOpenServer = { ip, port ->
+                                backStack.add(MainNavigation.Server(ip, port))
                             }
-                            entry<MainNavigation.Mod> { nav ->
-                                ModDetailScreen(
-                                    modId = nav.modName,
-                                    onOpenMod = { targetId ->
-                                        if (RepoMods.mods.value.any { it.id == targetId } || SettingsManager.config.value.cachedManifest.any { it.id == targetId }) {
-                                            backStack.add(MainNavigation.Mod(targetId))
-                                        }
-                                    },
-                                    onBack = { 
-                                        backStack.removeLastOrNull()
-                                        if (backStack.isEmpty()) {
-                                            backStack.add(MainNavigation.Search)
-                                        }
-                                    }
-                                )
+                        )
+                    }
+                    entry<MainNavigation.Server> { nav ->
+                        ServerDetailScreen(
+                            ip = nav.ip,
+                            port = nav.port,
+                            onOpenMod = { targetId ->
+                                if (RepoMods.mods.value[targetId] != null || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                    backStack.add(MainNavigation.Mod(targetId))
+                                }
+                            },
+                            onBack = {
+                                backStack.removeLastOrNull()
+                                if (backStack.isEmpty()) {
+                                    backStack.add(MainNavigation.Servers)
+                                }
                             }
-                        })
-
-                }
-
-
-                val clipboard = LocalClipboard.current
-
-                val launchOptionDialog by RepoMods.launchOptionDialog.collectAsState()
-                if (launchOptionDialog) {
-                    AlertDialog(
-                        onDismissRequest = { RepoMods.launchOptionDialog.value = false },
-                        confirmButton = {
-                            TextButton(onClick = { RepoMods.launchOptionDialog.value = false }) { Text("Close") }
-                        },
-                        title = { Text("Copy Details") },
-                        text = {
-                            SelectionContainer {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("To make BepInEx work on Linux you need to add the following to the Steam Launch Options for Nuclear Option.")
-
-                                    Surface(
-                                        onClick = {
-                                            scope.launch {
-                                                clipboard.setClipEntry(ClipEntry(StringSelection("WINEDLLOVERRIDES=\"winhttp=n,b\" %command%")))
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Box(Modifier.padding(16.dp)) {
-                                            Text(
-                                                text = "WINEDLLOVERRIDES=\"winhttp=n,b\" %command%",
-                                                style = MaterialTheme.typography.bodyLarge
-                                            )
-                                        }
-                                    }
+                        )
+                    }
+                    entry<MainNavigation.Settings> {
+                        SettingsScreen()
+                    }
+                    entry<MainNavigation.Mod> { nav ->
+                        ModDetailScreen(
+                            modId = nav.modName,
+                            onOpenMod = { targetId ->
+                                if (RepoMods.mods.value[targetId] != null || SettingsManager.cachedManifest.value.manifest.any { it.id == targetId }) {
+                                    backStack.add(MainNavigation.Mod(targetId))
+                                }
+                            },
+                            onBack = {
+                                backStack.removeLastOrNull()
+                                if (backStack.isEmpty()) {
+                                    backStack.add(MainNavigation.Search)
                                 }
                             }
                         }
@@ -167,8 +162,15 @@ fun App() {
                     }
                 }
             }
+                        )
+                    }
+                })
+
         }
+
+        Dialogs()
     }
+}
 
 @Composable
 private fun ErrorToastCard(toast: ErrorNotifications.ErrorToast) {

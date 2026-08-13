@@ -2,7 +2,7 @@
 
 A Mod Manager for the Game Nuclear Option
 
-Features:
+# Features
 - Automatic BepInEx installation
 - Mod searching
 - Mod installing and updating
@@ -11,12 +11,33 @@ Features:
 - Adding Mods from Files
 - Mod toggling
 - Mod Uninstalling
+- Modpack Sharing
+- Server List
+- Direct Server Connect
+- Automatic Server Modpack resolution
 - Customizable Theme
 
 
+## Installation
+
+Download the appropriate file for your platform from the [Latest Release](https://github.com/Combat787/NOMM/releases/latest).
+
+### Windows
+* **Portable:** `portable.exe`
+* **Installer:** `.msi`
+
+### Linux
+* **Debian:** `.deb`
+* **Fedora:** `.rpm`
+* **Standalone:** `.AppImage`
+* **Flatpak:** `.flatpak` *(Flatpak may or may not work)*
+
 To work NOMM retrieves a manifest from [NOMNOM](https://github.com/KopterBuzz/NOMNOM) to get the list of mods. To add your own mods go there.
 
-App Icon made by Shumatsu
+## Credits
+- [RaylaValdez](https://github.com/RaylaValdez): `Server List Backend and NOSMR`
+- Shumatsu: `App Icon`
+- [Combat](https://github.com/Combat787): `The Rest`
 
 This is a Kotlin Multiplatform project targeting Desktop (JVM).
 

@@ -1,8 +1,23 @@
 package com.combat.nomm
 
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import nuclearoptionmodmanager.composeapp.generated.resources.Res
+import nuclearoptionmodmanager.composeapp.generated.resources.close_24px
+import nuclearoptionmodmanager.composeapp.generated.resources.search_24px
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 fun <T> List<T>.sortFilterByQuery(
     query: String,
@@ -103,4 +118,253 @@ fun measureDamerauLevenshtein(source: CharSequence, target: CharSequence, thresh
     }
 
     return prevRow[tLen]
+}
+
+
+val tagSynonyms = mapOf(
+    "flavour" to "flavor",
+    "weapons" to "weapon",
+)
+
+fun normalizeTag(tag: String): String {
+    val normalized = tag.trim().lowercase()
+    return tagSynonyms[normalized] ?: normalized
+}
+
+data class TagFilter(
+    val tag: String,
+    val label: String,
+    val count: Int,
+)
+
+val excludedTagFilters = setOf("mod")
+
+fun List<Extension>.commonTagFilters(minMods: Int = 2): List<TagFilter> {
+    val modIds = HashMap<String, MutableSet<String>>()
+    val labelCounts = HashMap<String, HashMap<String, Int>>()
+    forEach { ext ->
+        ext.tags.forEach { tag ->
+            val normalized = normalizeTag(tag)
+            if (normalized in excludedTagFilters) return@forEach
+            modIds.getOrPut(normalized) { mutableSetOf() }.add(ext.id)
+            val labels = labelCounts.getOrPut(normalized) { hashMapOf() }
+            labels[tag] = (labels[tag] ?: 0) + 1
+        }
+    }
+    return modIds.entries
+        .map { (normalized, ids) ->
+            TagFilter(
+                tag = normalized,
+                label = (labelCounts.getValue(normalized).maxByOrNull { it.value }?.key ?: normalized)
+                    .replaceFirstChar { it.uppercaseChar() },
+                count = ids.size
+            )
+        }
+        .filter { it.count >= minMods }
+        .sortedByDescending { it.count }
+}
+
+fun List<Extension>.filterByTags(selectedTags: Set<String>): List<Extension> {
+    if (selectedTags.isEmpty()) return this
+    return filter { ext -> ext.tags.any { normalizeTag(it) in selectedTags } }
+}
+
+@Composable
+fun rememberFilteredExtensions(
+    allMods: List<Extension>,
+    searchQuery: String,
+    selectedTags: Set<String> = emptySet(),
+): List<Extension> {
+    return rememberFilteredList(
+        allItems = allMods,
+        searchQuery = searchQuery,
+        selectedTags,
+        onBlankQuery = { items ->
+            items.filterByTags(selectedTags).sortedByDescending { it.downloadCount }
+        },
+        onFilterQuery = { items, query ->
+            items.filterByTags(selectedTags).sortFilterByQuery(query, minSimilarity = 0.3) { ext, q ->
+                val nameScore = fuzzyPowerScore(q, ext.displayName)
+                val idScore = fuzzyPowerScore(q, ext.id)
+                val tagScore = ext.tags.maxOfOrNull { fuzzyPowerScore(q, it) } ?: 0.0
+                val authorScore = ext.authors.maxOfOrNull { fuzzyPowerScore(q, it) } ?: 0.0
+
+                val popularityFactor = log10((ext.downloadCount?.toDouble() ?: 1.0) + 1.0)
+                val weightedScore =
+                    ((nameScore * 5.0) + (idScore * 2.0) + (authorScore * 1.5) + tagScore) * (1.0 + (popularityFactor * 0.1))
+
+                val lengthPenalty = if (ext.displayName.length > q.length * 3) 0.9 else 1.0
+                ext to (weightedScore * lengthPenalty)
+            }
+        }
+    )
+}
+
+
+fun List<ServerEntry>.applyServerFilters(
+    showFavorites: Boolean,
+    showModded: Boolean,
+    showVanilla: Boolean,
+    showUser: Boolean,
+    showDedicated: Boolean,
+    showPve: Boolean,
+    showPvp: Boolean,
+): List<ServerEntry> {
+    val anyActive =
+        showFavorites || showModded || showVanilla || showUser || showDedicated || showPve || showPvp
+    if (!anyActive) return this
+    val modGroupActive = showModded || showVanilla
+    val typeGroupActive = showUser || showDedicated
+    val modeGroupActive = showPve || showPvp
+    return filter {
+        (!showFavorites || it.isFavorite)
+                && (!modGroupActive || (showModded && it.modlist != null) || (showVanilla && it.modlist == null))
+                && (!typeGroupActive || (showUser && it.isLobby) || (showDedicated && !it.isLobby))
+                && (!modeGroupActive || (showPvp && it.missionData?.pvpType == "1") || (showPve && it.missionData?.pvpType == "2"))
+    }
+}
+
+@Composable
+fun rememberFilteredServers(
+    allServers: List<ServerEntry>,
+    searchQuery: String,
+    showUser: Boolean,
+    showDedicated: Boolean,
+    showPve: Boolean,
+    showPvp: Boolean,
+    showModded: Boolean,
+    showVanilla: Boolean,
+    showFavorites: Boolean,
+    sortBy: SortType
+): List<ServerEntry> {
+    return rememberFilteredList(
+        allItems = allServers,
+        searchQuery = searchQuery,
+        showUser,
+        showDedicated,
+        showPve,
+        showPvp,
+        showModded,
+        showVanilla,
+        showFavorites,
+        sortBy,
+        onBlankQuery = { items ->
+            val servers = items.applyServerFilters(
+                showFavorites = showFavorites,
+                showModded = showModded,
+                showVanilla = showVanilla,
+                showUser = showUser,
+                showDedicated = showDedicated,
+                showPve = showPve,
+                showPvp = showPvp,
+            )
+
+            val sorted = when (sortBy) {
+                SortType.PING -> servers.sortedBy { it.info?.ping }
+                SortType.PLAYERS -> servers.sortedByDescending { it.info?.players }
+                SortType.DURATION -> servers.sortedByDescending { it.info?.timeLastPlayed }
+            }
+
+            sorted.sortedByDescending { it.isFavorite }
+        },
+        onFilterQuery = { items, query ->
+            items.sortFilterByQuery(query, minSimilarity = 0.3) { entry, q ->
+                val nameScore = fuzzyPowerScore(q, entry.displayName)
+                val idScore = entry.info?.map?.let { fuzzyPowerScore(q, it) } ?: 0.0
+
+                val weightedScore = ((nameScore * 5.0) + (idScore * 2.0))
+
+                val lengthPenalty = if (entry.displayName.length > q.length * 3) 0.9 else 1.0
+                entry to (weightedScore * lengthPenalty)
+            }
+        }
+    )
+}
+
+
+@Composable
+fun <T> rememberFilteredList(
+    allItems: List<T>,
+    searchQuery: String,
+    vararg keys: Any?,
+    debounceTime: Duration = 250.milliseconds,
+    onBlankQuery: (List<T>) -> List<T>,
+    onFilterQuery: (List<T>, String) -> List<T>
+): List<T> {
+    var filteredItems by remember { mutableStateOf(onBlankQuery(allItems)) }
+    var isInitialLoad by remember { mutableStateOf(true) }
+
+    LaunchedEffect(searchQuery, allItems, *keys) {
+        if (!isInitialLoad && searchQuery.isNotEmpty()) {
+            delay(debounceTime)
+        }
+
+        val results = withContext(Dispatchers.Default) {
+            if (searchQuery.isBlank()) {
+                onBlankQuery(allItems)
+            } else {
+                onFilterQuery(allItems, searchQuery)
+            }
+        }
+        filteredItems = results
+        isInitialLoad = false
+    }
+    return filteredItems
+}
+
+
+@Composable
+fun RowScope.SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier.Companion,
+    placeholder: String = "Search mods...",
+) {
+
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier
+            .weight(1f),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.secondary,
+            unfocusedContainerColor = MaterialTheme.colorScheme.secondary,
+
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+
+
+            cursorColor = MaterialTheme.colorScheme.onSecondary,
+            focusedTextColor = MaterialTheme.colorScheme.onSecondary,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSecondary,
+        ),
+        placeholder = {
+            Text(
+                placeholder,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondary
+            )
+        },
+        leadingIcon = {
+            Icon(
+                painterResource(Res.drawable.search_24px),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondary,
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        painterResource(Res.drawable.close_24px),
+                        contentDescription = "Clear",
+                        tint = MaterialTheme.colorScheme.onSecondary
+                    )
+                }
+            }
+        },
+        shape = MaterialTheme.shapes.small,
+        singleLine = true,
+    )
 }

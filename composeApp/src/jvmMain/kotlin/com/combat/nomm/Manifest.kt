@@ -2,6 +2,7 @@ package com.combat.nomm
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import java.security.MessageDigest
 import java.util.concurrent.ThreadLocalRandom
 
 typealias Manifest = List<Extension>
@@ -43,37 +44,47 @@ data class UrlReference(
 data class PackageReference(
     val id: String,
     val version: Version? = null
-) {
-}
+)
 
-@Serializable(with = VersionSerializer::class)
-class Version(vararg components: Int) : Comparable<Version> {
 
-    private val parts: List<Int> = components.toList()
-
-    override fun toString(): String = parts.joinToString(".")
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Version) return false
-        return this.parts == other.parts
-    }
-
-    override fun hashCode(): Int = parts.hashCode()
-
-    override fun compareTo(other: Version): Int {
-        val maxLength = maxOf(this.parts.size, other.parts.size)
-        for (i in 0 until maxLength) {
-            val thisPart = this.parts.getOrElse(i) { 0 }
-            val otherPart = other.parts.getOrElse(i) { 0 }
-            if (thisPart != otherPart) {
-                return thisPart.compareTo(otherPart)
-            }
+fun computeModHashPrefix(id: String, version: Version): String {
+    val input = "$id|$version"
+    val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+    return buildString(6) {
+        for (i in 0 until 3) {
+            append(Integer.toHexString(digest[i].toInt() and 0xFF).padStart(2, '0'))
         }
-        return 0
     }
 }
 
+fun buildModHashLookup(manifest: Manifest): Map<String, PackageReference> {
+    val lookup = HashMap<String, PackageReference>()
+    manifest.forEach { ext ->
+        ext.artifacts.forEach { artifact ->
+            val hashPrefix = computeModHashPrefix(ext.id, artifact.version)
+            lookup[hashPrefix] = PackageReference(ext.id, artifact.version)
+        }
+    }
+    return lookup
+}
+
+const val OUTDATED_TAG = "OUTDATED"
+
+fun Manifest.latestGameVersion(): Version? =
+    asSequence()
+        .flatMap { it.artifacts.asSequence() }
+        .mapNotNull { it.gameVersion?.let(::parseGameVersion) }
+        .maxOrNull()
+
+fun Extension.isOutdated(latestGameVersion: Version?): Boolean {
+    if (latestGameVersion == null) return false
+    val latestArtifact = artifacts.maxByOrNull { it.version } ?: return false
+    val gameVersion = latestArtifact.gameVersion?.let(::parseGameVersion) ?: return false
+    return gameVersion < latestGameVersion
+}
+
+private fun parseGameVersion(value: String): Version? =
+    runCatching { Version.fromString(value) }.getOrNull()
 
 fun fetchFakeManifest(): List<Extension> {
     val latinWords = arrayOf(
@@ -94,6 +105,8 @@ fun fetchFakeManifest(): List<Extension> {
         val name1 = latinWords[rnd.nextInt(16)]
         val name2 = latinWords[rnd.nextInt(16)]
         val pkgName = "$name1 $name2"
+
+        val modGameVersion = if (rnd.nextBoolean()) "0.34" else "0.33"
 
         val versionCount = rnd.nextInt(10, 30)
         val artifacts = ArrayList<Artifact>(versionCount)
@@ -116,7 +129,7 @@ fun fetchFakeManifest(): List<Extension> {
                 version = Version(1, v, 0),
                 category = "Release",
                 type = "Mod",
-                gameVersion = "0.33",
+                gameVersion = modGameVersion,
                 downloadUrl = "https://cdn.ex.com/$author/$pkgId-$v.zip",
                 hash = fastHash,
                 extends = null,
