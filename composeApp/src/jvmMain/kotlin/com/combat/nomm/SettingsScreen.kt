@@ -144,14 +144,6 @@ fun SettingsScreen() {
                     placeholder = "",
                 )
                 SettingsSwitchRow(
-                    label = "Ignore Manifest Version",
-                    subLabel = "Stops checking if the manifest version is still the same when fetching.",
-                    checked = currentConfig.ignoreManifestVersion,
-                    onCheckedChange = { newHSV ->
-                        SettingsManager.updateConfig(currentConfig.copy(ignoreManifestVersion = newHSV))
-                    }
-                )
-                SettingsSwitchRow(
                     label = "Ignore Hash Mismatch",
                     subLabel = "Stops checking if the Hash of a downloaded Mod is correct.",
                     checked = currentConfig.ignoreHashMismatch,
