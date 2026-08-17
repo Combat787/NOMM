@@ -9,15 +9,10 @@ import dev.nucleusframework.updater.provider.UpdateProvider
 
 internal const val NOMM_LATEST_RELEASE_URL = "https://github.com/Combat787/NOMM/releases/latest"
 
-private val manualWindowsUpdateTypes = setOf(
-    ExecutableType.PORTABLE,
-    ExecutableType.ZIP,
-)
-
 internal fun requiresManualWindowsUpdate(
     platform: Platform,
-    executableType: ExecutableType,
-): Boolean = platform == Platform.Windows && executableType in manualWindowsUpdateTypes
+    @Suppress("UNUSED_PARAMETER") executableType: ExecutableType,
+): Boolean = platform == Platform.Windows
 
 internal fun requiresManualWindowsUpdate(): Boolean =
     requiresManualWindowsUpdate(Platform.Current, ExecutableRuntime.type())
