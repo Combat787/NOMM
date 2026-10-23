@@ -70,6 +70,9 @@ val changelogs = mutableMapOf(
         Added a Badge to show what Sort By option is selected.
         Fixed Logs actually logging.
     """.trimIndent(),
+    Version(5, 4, 1) to """
+        Fixed a issue with the previously used networking engine that a change in the github release headers broke by replacing the engine.
+    """.trimIndent(),
 )
 
 fun changelogsAnnotatedString(): AnnotatedString = buildAnnotatedString {

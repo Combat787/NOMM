@@ -3,13 +3,11 @@ package com.combat.nomm
 import dev.nucleusframework.nativehttp.ktor.installNativeSsl
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.HttpRedirect
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.UserAgent
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +17,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 object NetworkClient {
-    val client = HttpClient(CIO) {
+    val client = HttpClient(OkHttp) {
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true
@@ -37,6 +35,7 @@ object NetworkClient {
         }
         install(HttpRedirect)
         installNativeSsl()
+
     }
     
 
