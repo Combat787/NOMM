@@ -43,7 +43,6 @@ data class Configuration(
     val fakeManifest: Boolean = false,
     val manifestUrl: String = "https://kopterbuzz.github.io/NOMNOM/manifest/manifest.json",
     val manifestVersionUrl: String = "https://kopterbuzz.github.io/NOMNOM/manifest/version.json",
-    val ignoreManifestVersion: Boolean = false,
     val ignoreHashMismatch: Boolean = false,
     val ignoreNewUpdates: Boolean = false,
     val nosmr: Boolean = true,

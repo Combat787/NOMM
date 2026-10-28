@@ -57,45 +57,31 @@ object NetworkClient {
     
     suspend fun fetchManifest(): List<Extension>? = withContext(Dispatchers.IO) {
         runCatching {
-
-            val versionResponse = client.get(SettingsManager.config.value.manifestVersionUrl)
-
-            val version = if (versionResponse.status.isSuccess()) {
-                json.decodeFromString<Version>(versionResponse.bodyAsText())
-            } else return@runCatching null
-
             val cached = SettingsManager.cachedManifest.value
-            if (shouldSkipManifestFetch(
-                    cached.version,
-                    version,
-                    cached.manifest.isNotEmpty(),
-                    SettingsManager.config.value.ignoreManifestVersion
-                )
-            ) {
-                return@runCatching cached.manifest
-            }
 
-            val manifestResponse = client.get(SettingsManager.config.value.manifestUrl)
-            if (manifestResponse.status.isSuccess()) {
-                val manifest = json.decodeFromString<Manifest>(manifestResponse.body()).distinctBy { it.id }
-                SettingsManager.updateCachedManifest(cached.copy(version = version, manifest = manifest))
-                manifest
-            } else {
-                null
+            val manifestResponse = client.get(SettingsManager.config.value.manifestUrl) {
+                header(HttpHeaders.CacheControl, "no-cache")
             }
+            if (!manifestResponse.status.isSuccess()) return@runCatching null
+
+            val manifest = json.decodeFromString<Manifest>(manifestResponse.body()).distinctBy { it.id }
+            val version = runCatching {
+                val versionResponse = client.get(SettingsManager.config.value.manifestVersionUrl) {
+                    header(HttpHeaders.CacheControl, "no-cache")
+                }
+                if (versionResponse.status.isSuccess()) {
+                    json.decodeFromString<Version>(versionResponse.bodyAsText())
+                } else cached.version
+            }.getOrDefault(cached.version)
+
+            SettingsManager.updateCachedManifest(cached.copy(version = version, manifest = manifest))
+            manifest
         }.getOrElse { e ->
             Log.log("Failed to fetch manifest: ${e.message}")
             null
         }
     }
 }
-
-fun shouldSkipManifestFetch(
-    cachedVersion: Version,
-    remoteVersion: Version,
-    cachedManifestNonEmpty: Boolean,
-    ignoreManifestVersion: Boolean
-): Boolean = !ignoreManifestVersion && cachedVersion == remoteVersion && cachedManifestNonEmpty
 
 @Serializable
 data class GitHubRelease(
