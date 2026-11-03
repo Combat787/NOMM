@@ -479,6 +479,13 @@ object LocalMods {
         }
     }
 
+		fun uninstallAll() {
+        mods.forEach { (_, meta) ->
+            if (meta.id in protectedIds) return@forEach
+            meta.uninstall()
+        }
+    }
+
     fun updateAll() {
         mods.forEach { (_, meta) ->
             meta.update()
