@@ -18,7 +18,6 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 
 object Installer {
