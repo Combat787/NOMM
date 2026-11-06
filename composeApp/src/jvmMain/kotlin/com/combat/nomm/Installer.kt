@@ -18,6 +18,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 
 object Installer {
@@ -48,7 +49,7 @@ object Installer {
                     val bytes = downloadWithRetry(modId, url, isBepInEx, cancelAction) { downloadedBytes ->
                         if (hash == null || SettingsManager.config.value.ignoreHashMismatch) true else {
                             val expected = hash.removePrefix("sha256:").hexToByteArray().toByteString()
-                            
+
                             downloadedBytes.toByteString().sha256() == expected
                         }
                     }
@@ -94,20 +95,24 @@ object Installer {
     ): ByteArray {
         repeat(attempts) { i ->
             try {
-                val response = NetworkClient.client.get(url) {
+                val bytes = NetworkClient.client.prepareGet(url) {
                     onDownload { sent, total ->
                         val p = if ((total ?: 0L) > 0) sent.toFloat() / total!! else null
                         updateState(modId, TaskState(TaskState.Phase.DOWNLOADING, p, true, cancelAction), isBepInEx)
                     }
+                }.execute { response ->
+                    response.readRawBytes()
                 }
-                val bytes = response.readRawBytes()
 
                 val isValid = withContext(Dispatchers.Default) { checkHash(bytes) }
                 if (!isValid) throw Exception("Hash mismatch for $modId")
 
                 return bytes
             } catch (e: Exception) {
-                if (e is CancellationException) throw e
+                if (e is CancellationException) {
+                    clearStatus(modId, isBepInEx)
+                    throw e
+                }
                 if (i < attempts - 1) delay((1000L * (i + 1)).milliseconds)
                 else throw e
             }
@@ -202,7 +207,11 @@ object Installer {
 
                 if (source.isDirectory) {
                     if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
-                        if (Files.isSymbolicLink(destination) || !Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) {
+                        if (Files.isSymbolicLink(destination) || !Files.isDirectory(
+                                destination,
+                                LinkOption.NOFOLLOW_LINKS
+                            )
+                        ) {
                             throw IllegalStateException("Cannot create BepInEx directory: $destination")
                         }
                     } else {
@@ -210,7 +219,11 @@ object Installer {
                     }
                 } else {
                     if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
-                        if (Files.isSymbolicLink(destination) || Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) {
+                        if (Files.isSymbolicLink(destination) || Files.isDirectory(
+                                destination,
+                                LinkOption.NOFOLLOW_LINKS
+                            )
+                        ) {
                             throw IllegalStateException("Cannot install BepInEx file: $destination")
                         }
                         return@forEach
@@ -259,6 +272,7 @@ object Installer {
         else installStatuses.update { it - id }
     }
 }
+
 data class TaskState(
     val phase: Phase,
     val progress: Float? = 0f,
