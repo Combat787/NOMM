@@ -196,6 +196,26 @@ fun SettingsScreen() {
                         )
                     }
                 )
+                if (currentConfig.paletteStyle is PaletteStyle.Cmf) {
+                    SettingsSwitchRow(
+                        label = "Use Cmf Theme Secondary Seed Color",
+                        subLabel = "The Cmf Style allows for a Secondary Seed Color.",
+                        checked = currentConfig.useSecondarySeedColor,
+                        onCheckedChange = { newValue ->
+                            SettingsManager.updateConfig(currentConfig.copy(useSecondarySeedColor = newValue))
+                            RepoMods.fetchManifest()
+                        }
+                    )
+                    SettingsColorPicker(
+                        label = "Cmf Theme Secondary Seed Color",
+                        selectedHSV = currentConfig.secondarySeedColorHSVColor,
+                        onHSVSelected = { newHSV ->
+                            SettingsManager.updateConfig(
+                                currentConfig.copy(secondarySeedColorHSVColor = newHSV)
+                            )
+                        }
+                    )
+                }
                 SettingsSwitchRow(
                     label = "Custom Theme",
                     subLabel = "Allows for more customization in the Theme.",
@@ -273,9 +293,7 @@ fun SettingsScreen() {
                 SettingsDropdownRow(
                     label = "Theme Style",
                     subLabel = currentConfig.paletteStyle.getStringName(),
-                    options = listOf(
-                        PaletteStyle.TonalSpot, PaletteStyle.Neutral, PaletteStyle.Vibrant, PaletteStyle.Expressive
-                    ).associateBy { theme -> theme.getStringName() },
+                    options = PaletteStyle.KnownStyles.associateBy { theme -> theme.getStringName() },
                     onOptionSelected = {
                         SettingsManager.updateConfig(currentConfig.copy(paletteStyle = it))
                     })
@@ -363,6 +381,7 @@ private fun PaletteStyle.getStringName(): String = when (this) {
     PaletteStyle.Monochrome -> "Monochrome"
     PaletteStyle.Fidelity -> "Fidelity"
     PaletteStyle.Content -> "Content"
+    is PaletteStyle.Cmf -> "Cmf"
 }
 
 private fun Contrast.getStringName(): String = when (this) {

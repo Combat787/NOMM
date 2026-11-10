@@ -73,6 +73,13 @@ val changelogs = mutableMapOf(
     Version(5, 4, 1) to """
         Fixed a issue with the previously used networking engine that a change in the github release headers broke by replacing the engine.
     """.trimIndent(),
+    Version(5, 5, 0) to """
+        Fixed a issue where after one clicked update all it repeatedly showed it even though all mods were already updating.
+        Updated a lot of dependencies.
+        Added more customization options to the Theme Picker.
+        Added support for the AI Assisted Tag.
+        Reworked the OUTDATED Tag into a proper Version Tag.
+    """.trimIndent(),
 )
 
 fun changelogsAnnotatedString(): AnnotatedString = buildAnnotatedString {

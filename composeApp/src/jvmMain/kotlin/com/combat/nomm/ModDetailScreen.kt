@@ -89,8 +89,8 @@ fun ModDetailScreen(
                     alignment = Alignment.Center,
                     modifier = Modifier.ignoreIntrinsicSize().fillMaxHeight().aspectRatio(1f)
                         .clip(MaterialTheme.shapes.small).border(
-                        1.dp, MaterialTheme.colorScheme.onSurface, MaterialTheme.shapes.small
-                    )
+                            1.dp, MaterialTheme.colorScheme.onSurface, MaterialTheme.shapes.small
+                        )
                 )
             }
         },
@@ -126,7 +126,6 @@ fun ModDetailScreen(
 @Composable
 fun ModDetails(modMeta: ModMeta?, mod: Extension, modDetailScreen: Boolean = false) {
     val latestGameVersion by RepoMods.latestGameVersion.collectAsState()
-    val isOutdated = remember(mod, latestGameVersion) { mod.isOutdated(latestGameVersion) }
     val latestArtifactGameVersion = remember(mod) {
         mod.artifacts.maxByOrNull { it.version }?.gameVersion
     }
@@ -162,7 +161,7 @@ fun ModDetails(modMeta: ModMeta?, mod: Extension, modDetailScreen: Boolean = fal
             }
         }
 
-        if (isOutdated || mod.tags.isNotEmpty() || !modOnManifest) {
+        if (latestGameVersion != null || mod.tags.isNotEmpty() || !modOnManifest) {
             VerticalDivider(modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp))
         }
 
@@ -196,7 +195,40 @@ fun ModDetails(modMeta: ModMeta?, mod: Extension, modDetailScreen: Boolean = fal
                 }
             }
         ) {
-            if (isOutdated) {
+            if (latestArtifactGameVersion != null) {
+                val version = Version.fromString(latestArtifactGameVersion)
+                val tagColors = when {
+                    version == latestGameVersion -> Pair(
+                        MaterialTheme.colorScheme.onTertiary,
+                        MaterialTheme.colorScheme.tertiary
+                    )
+
+                    (version.compareTo(
+                        latestGameVersion ?: Version(0, 0, 0),
+                        2
+                    ) == 0) -> Pair(
+                        MaterialTheme.colorScheme.onTertiary,
+                        MaterialTheme.colorScheme.tertiary
+                    )
+
+                    else -> Pair(MaterialTheme.colorScheme.onError, MaterialTheme.colorScheme.error)
+                }
+                val hoverColors = when {
+                    version == latestGameVersion -> Pair(
+                        MaterialTheme.colorScheme.tertiaryContainer,
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+
+                    (version.compareTo(
+                        latestGameVersion ?: Version(0, 0, 0),
+                        2
+                    ) == 0) -> Pair(
+                        MaterialTheme.colorScheme.tertiaryContainer,
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+
+                    else -> Pair(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+                }
                 TooltipBox(
                     positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
                         TooltipAnchorPosition.Above
@@ -205,20 +237,27 @@ fun ModDetails(modMeta: ModMeta?, mod: Extension, modDetailScreen: Boolean = fal
                     tooltip = {
                         DisableSelection {
                             PlainTooltip(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                containerColor = hoverColors.first,
+                                contentColor = hoverColors.second,
                             ) {
                                 Text(
-                                    "Latest release targets game $latestArtifactGameVersion, latest game update is $latestGameVersion.",
+                                    if (latestGameVersion == version) "Latest release targets the latest game update $latestGameVersion." else
+                                        "Latest release targets game $latestArtifactGameVersion, latest game update is $latestGameVersion.",
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
                         }
                     }
                 ) {
-                    TagChip(OUTDATED_TAG, MaterialTheme.colorScheme.onError, MaterialTheme.colorScheme.error)
+
+                    TagChip(
+                        version.toString(),
+                        tagColors.first, tagColors.second
+                    )
+
                 }
             }
+
             if (!modOnManifest) {
                 TagChip(
                     "Local",
@@ -251,6 +290,13 @@ fun ModDetails(modMeta: ModMeta?, mod: Extension, modDetailScreen: Boolean = fal
             if (isServer) {
                 TagChip(
                     "Server",
+                    containerColor = MaterialTheme.colorScheme.onTertiary,
+                    contentColor = MaterialTheme.colorScheme.tertiary,
+                )
+            }
+            if (mod.isAiAssisted) {
+                TagChip(
+                    "AI Assisted",
                     containerColor = MaterialTheme.colorScheme.onTertiary,
                     contentColor = MaterialTheme.colorScheme.tertiary,
                 )

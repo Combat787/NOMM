@@ -64,7 +64,9 @@ object RepoMods {
                     isLoading.value = false
                 }
             }
-            val updatable = LocalMods.mods.filter { it.value.hasUpdate }
+
+            val updatable =
+                LocalMods.mods.filter { it.value.hasUpdate && (Installer.installStatuses.value[it.value.id] == null) }
                 .mapNotNull { mods.value[it.key] }
             if (updatable.isNotEmpty() && !SettingsManager.config.value.ignoreNewUpdates) {
                 val hasExistingUpdateNotification = SettingsManager.criticalInformation.any {

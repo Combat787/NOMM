@@ -21,6 +21,7 @@ data class Extension(
     val imageUrl: String? = null,
     val imageHash: String? = null,
     val isClientOrServer: ModType? = null,
+    val isAiAssisted: Boolean = false,
     @Transient val real: Boolean = true
 )
 
@@ -46,7 +47,7 @@ data class Artifact(
     val hash: String? = null,
     val extends: PackageReference? = null,
     val dependencies: List<PackageReference> = emptyList(),
-    val incompatibilities: List<PackageReference> = emptyList()
+    val incompatibilities: List<PackageReference> = emptyList(),
 ) {
     val resolvedDownloadUrl: String? get() = downloadUrl ?: downloadURL
 }
@@ -85,7 +86,6 @@ fun buildModHashLookup(manifest: Manifest): Map<String, PackageReference> {
     return lookup
 }
 
-const val OUTDATED_TAG = "OUTDATED"
 
 fun Manifest.latestGameVersion(): Version? =
     asSequence()

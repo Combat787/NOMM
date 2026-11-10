@@ -15,7 +15,7 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.4.1"
+val appVersion = "5.5.0"
 
 
 java {
@@ -49,8 +49,6 @@ kotlin {
 
             implementation(libs.nucleus.native.http.ktor)
             implementation(libs.nucleus.aot)
-
-            implementation(libs.composewebview)
 
             implementation(libs.nucleus.fs.watcher)
             

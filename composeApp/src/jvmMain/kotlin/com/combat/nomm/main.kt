@@ -20,6 +20,7 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
 import com.combat.nomm.LocalMods.refresh
 import com.combat.nomm.steamworker.runSteamWorker
+import com.materialkolor.PaletteStyle
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.aotTraining
 import dev.nucleusframework.application.nucleusApplication
@@ -99,7 +100,11 @@ fun main(args: Array<String>) {
             configuration.neutralVariantColorHSVColor.color,
             configuration.errorColorHSVColor.color,
             useDarkTheme,
-            configuration.paletteStyle,
+            configuration.paletteStyle.let {
+                if (it is PaletteStyle.Cmf && configuration.useSecondarySeedColor) {
+                    PaletteStyle.Cmf(configuration.secondaryColorHSVColor.color)
+                } else it
+            },
             configuration.contrast
         ) {
             MaterialDecoratedWindow(
