@@ -18,8 +18,8 @@ class UpdaterTest {
     }
 
     @Test
-    fun `allows automatic update for Windows msi builds`() {
-        assertFalse(requiresManualWindowsUpdate(Platform.Windows, ExecutableType.MSI))
+    fun `requires manual update for Windows msi builds`() {
+        assertTrue(requiresManualWindowsUpdate(Platform.Windows, ExecutableType.MSI))
     }
 
     @Test

@@ -157,8 +157,9 @@ fun ManualUpdateDialog(
         },
         text = {
             Text(
-                text = "Automatic updates are not available for the Windows portable or ZIP version. " +
-                        "Download the latest release from GitHub and replace the current NOMM files.",
+                text = "Automatic updates are not currently available on Windows. " +
+                        "Download the latest release from GitHub. Run the installer for MSI builds, " +
+                        "or replace the current NOMM files for portable and ZIP builds.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         },
@@ -167,7 +168,7 @@ fun ManualUpdateDialog(
                 uriHandler.openUri(NOMM_LATEST_RELEASE_URL)
                 onDismiss()
             }) {
-                Text("Take me there!")
+                Text("Open Latest Release")
             }
         },
         dismissButton = {
