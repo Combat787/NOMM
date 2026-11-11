@@ -26,7 +26,7 @@ object NetworkClient {
             })
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 600_000
+            requestTimeoutMillis = 600000
             connectTimeoutMillis = 30000
             socketTimeoutMillis = 30000
         }
@@ -37,7 +37,7 @@ object NetworkClient {
         installNativeSsl()
 
     }
-    
+
 
     suspend fun fetchBepInExVersions(): List<GitHubRelease> = withContext(Dispatchers.IO) {
 
@@ -46,15 +46,15 @@ object NetworkClient {
                 parameters.append("per_page", "100")
             }
         }
-        json.decodeFromString<List<GitHubRelease>>(bepinexReleases.bodyAsText()).filter { 
+        json.decodeFromString<List<GitHubRelease>>(bepinexReleases.bodyAsText()).filter {
             runCatching {
                 val version = json.decodeFromString<Version>(it.tagName)
-                    version >= Version(5) && version < Version(6)
+                version >= Version(5) && version < Version(6)
             }.getOrElse { false }
-            
+
         }
     }
-    
+
     suspend fun fetchManifest(): List<Extension>? = withContext(Dispatchers.IO) {
         runCatching {
 

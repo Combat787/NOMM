@@ -161,6 +161,26 @@ fun LibraryScreen(
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
+										DropdownMenuItem(
+                        text = { Text("Uninstall all Mods") }, onClick = {
+                            menuExpanded = false
+                            LocalMods.uninstallAll()
+                        }, leadingIcon = {
+                            BadgedBox(
+                                badge = {
+                                    Icon(
+                                        painterResource(Res.drawable.delete_24px),
+                                        null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            ) {
+                                Icon(painterResource(Res.drawable.newsstand_24px), null)
+                            }
+                        },
+                        colors = itemColors,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
+                    )
                 }
             }
             Button(
