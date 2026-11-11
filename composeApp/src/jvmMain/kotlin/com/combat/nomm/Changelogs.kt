@@ -80,6 +80,12 @@ val changelogs = mutableMapOf(
         Added support for the AI Assisted Tag.
         Reworked the OUTDATED Tag into a proper Version Tag.
     """.trimIndent(),
+    Version(5, 6, 0) to """
+        Fixed an issue that made download progress indicator not actually reflect the current download progress. by LillysInVR
+        Added an Uninstall all Mods button to the dropdown Menu in the Library Screen. by LillysInVR
+        Added explicit flatpak settings to include an compatible GLIBC version. by asier-ochoa
+        Changed that updating a Mod does not force enable it. by blacknight2u
+    """.trimIndent(),
 )
 
 fun changelogsAnnotatedString(): AnnotatedString = buildAnnotatedString {
