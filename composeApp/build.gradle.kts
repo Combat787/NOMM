@@ -15,7 +15,7 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.3.1"
+val appVersion = "5.5.0"
 
 
 java {
@@ -46,9 +46,12 @@ kotlin {
             implementation(libs.nucleus.taskbar)
             implementation(libs.nucleus.updater)
             implementation(libs.nucleus.native.http)
+
             implementation(libs.nucleus.native.http.ktor)
             implementation(libs.nucleus.aot)
 
+            implementation(libs.nucleus.fs.watcher)
+            
             implementation(libs.nucleus.notif.win)
             implementation(libs.nucleus.notif.mac)
             implementation(libs.nucleus.notif.linux)
@@ -59,6 +62,7 @@ kotlin {
 
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.cio)
+            implementation(libs.ktor.client.okhttp)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.filekit.core)
@@ -66,6 +70,7 @@ kotlin {
 
             implementation(libs.coil)
             implementation(libs.coil.ktor)
+            
 
             implementation(libs.materialKolor)
 

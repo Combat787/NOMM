@@ -20,6 +20,7 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
 import com.combat.nomm.LocalMods.refresh
 import com.combat.nomm.steamworker.runSteamWorker
+import com.materialkolor.PaletteStyle
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.aotTraining
 import dev.nucleusframework.application.nucleusApplication
@@ -28,15 +29,9 @@ import dev.nucleusframework.window.material.MaterialDecoratedWindow
 import dev.nucleusframework.window.material.MaterialTitleBar
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import nuclearoptionmodmanager.composeapp.generated.resources.iconpng
 import org.jetbrains.compose.resources.painterResource
@@ -69,7 +64,6 @@ fun main(args: Array<String>) {
         aotTraining {}
 
         onDeepLink { uri ->
-            println(uri)
             LocalMods.importMods(
                 PlatformFile(uri.toPath().toFile()))
         }
@@ -77,7 +71,7 @@ fun main(args: Array<String>) {
         LaunchedEffect(Unit) {
             initializeSevenZipNative()
             val initialFile = args.firstOrNull()
-            if (initialFile != null && (initialFile.endsWith("nomm.json") || initialFile.endsWith("nommpack"))) {
+            if (initialFile != null && (initialFile.endsWith(".nomm.json") || initialFile.endsWith(".nommpack"))) {
                 LocalMods.importMods(PlatformFile(initialFile))
             }
             refresh()
@@ -106,7 +100,11 @@ fun main(args: Array<String>) {
             configuration.neutralVariantColorHSVColor.color,
             configuration.errorColorHSVColor.color,
             useDarkTheme,
-            configuration.paletteStyle,
+            configuration.paletteStyle.let {
+                if (it is PaletteStyle.Cmf && configuration.useSecondarySeedColor) {
+                    PaletteStyle.Cmf(configuration.secondaryColorHSVColor.color)
+                } else it
+            },
             configuration.contrast
         ) {
             MaterialDecoratedWindow(
@@ -120,7 +118,7 @@ fun main(args: Array<String>) {
                                 SteamDiscovery.shutdown()
                             }
                         } catch (e: TimeoutCancellationException) {
-                            println("[NOMM] Shutdown timed out, force killing worker")
+                            Log.log("Shutdown timed out, force killing worker")
                             SteamDiscovery.forceKillWorker()
                         }
                     }
@@ -148,18 +146,18 @@ fun main(args: Array<String>) {
                         .distinctUntilChanged()
                         .collect { isMinimized ->
                             if (isMinimized && !wasMinimized) {
-                                println("[NOMM] Window minimized")
+                                Log.log("Window minimized")
                                 wasMinimized = true
                                 suspendJob = this@LaunchedEffect.launch {
                                     delay(60.seconds)
                                     if (windowState.isMinimized && !SteamDiscovery.isGameRunning()) {
-                                        println("[NOMM] Suspending Steam worker due to minimization")
+                                        Log.log("Suspending Steam worker due to minimization")
                                         SteamDiscovery.shutdown()
                                         SteamDiscovery.suspendedForMinimization = true
                                     }
                                 }
                             } else if (!isMinimized && wasMinimized) {
-                                println("[NOMM] Window restored")
+                                Log.log("Window restored")
                                 wasMinimized = false
                                 suspendJob?.cancel()
                                 suspendJob = null
@@ -182,7 +180,7 @@ fun main(args: Array<String>) {
                         .collect { screen ->
                             val isOnServers = screen == MainNavigation.Servers
                             if (!isOnServers && wasOnServers) {
-                                println("[NOMM] Navigated away from Servers")
+                                Log.log("Navigated away from Servers")
                                 wasOnServers = false
                                 screenSuspendJob = this@LaunchedEffect.launch {
                                     delay(10.seconds)
@@ -190,13 +188,13 @@ fun main(args: Array<String>) {
                                         && !SteamDiscovery.isGameRunning()
                                         && !windowState.isMinimized
                                     ) {
-                                        println("[NOMM] Suspending Steam worker due to screen change")
+                                        Log.log("Suspending Steam worker due to screen change")
                                         SteamDiscovery.shutdown()
                                         SteamDiscovery.suspendedForMinimization = true
                                     }
                                 }
                             } else if (isOnServers && !wasOnServers) {
-                                println("[NOMM] Navigated to Servers")
+                                Log.log("Navigated to Servers")
                                 wasOnServers = true
                                 screenSuspendJob?.cancel()
                                 screenSuspendJob = null
@@ -217,7 +215,7 @@ fun main(args: Array<String>) {
                             Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainer).fillMaxSize())
                             HorizontalDivider(modifier = Modifier.fillMaxWidth(), thickness = Dp.Hairline)
                         }
-                    }
+                    },
                 ) {
                     Icon(
                         painter = painterResource(Res.drawable.iconpng),

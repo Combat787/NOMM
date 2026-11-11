@@ -49,6 +49,8 @@ data class Configuration(
     val nosmr: Boolean = true,
     val steamworks: Boolean = true,
     val seedColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
+    val secondarySeedColorHSVColor: HSVColor = HSVColor(0.7f, 1f),
+    val useSecondarySeedColor: Boolean = false,
     val customScheme: Boolean = false,
     val primaryColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
     val secondaryColorHSVColor: HSVColor = HSVColor(0.3f, 1f),
@@ -144,7 +146,7 @@ object SettingsManager {
 }
 
 fun reportNommError(title: String, message: String) {
-    println("[NOMM] $title: $message")
+    Log.log("$title: $message")
     SettingsManager.criticalInformation.add(
         Triple(
             buildAnnotatedString { append(title) },

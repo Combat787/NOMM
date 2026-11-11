@@ -13,8 +13,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.materialkolor.*
+import com.materialkolor.Contrast
+import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
+import com.materialkolor.material3.DynamicMaterialExpressiveTheme
+import com.materialkolor.material3.DynamicMaterialThemeState
+import com.materialkolor.material3.rememberDynamicMaterialThemeState
 import nuclearoptionmodmanager.composeapp.generated.resources.JetBrainsMono
 import nuclearoptionmodmanager.composeapp.generated.resources.Res
 import org.jetbrains.compose.resources.Font
@@ -53,7 +57,7 @@ fun NOMMTheme(
         isAmoled = false,
         style = paletteStyle,
         contrastLevel = contrast.value,
-        specVersion = ColorSpec.SpecVersion.SPEC_2025,
+        specVersion = ColorSpec.SpecVersion.SPEC_2026,
     )
     
     DynamicMaterialExpressiveTheme(

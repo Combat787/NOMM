@@ -18,14 +18,13 @@ import org.jetbrains.compose.resources.painterResource
 fun LibraryScreen(
     onOpenMod: (String) -> Unit,
 ) {
-    val localMods by LocalMods.mods.collectAsState()
     val repoMods by RepoMods.mods.collectAsState()
     val cachedManifest by SettingsManager.cachedManifest
 
     var menuExpanded by remember { mutableStateOf(false) }
 
-    val sourceMods = remember(localMods, repoMods, cachedManifest) {
-        localMods.values.filter { it.id != "NOSMR" }.map { modMeta ->
+    val sourceMods = remember(LocalMods.mods, repoMods, cachedManifest) {
+        LocalMods.mods.values.filter { it.id != "NOSMR" }.map { modMeta ->
             repoMods[modMeta.id]
                 ?: cachedManifest.manifest.find { it.id == modMeta.id } ?: Extension(
                     id = modMeta.id,

@@ -64,6 +64,22 @@ val changelogs = mutableMapOf(
     Version(5, 3, 1) to """
         Fixed an issue when interacting with Tags.
     """.trimIndent(),
+    Version(5, 4, 0) to """
+        Added a Combined Tag Chip that shows up on overflow and can be hovered to view overflowed Tag Chips.
+        Added a Count Badge to show how many Server Browser Filters are selected.
+        Added a Badge to show what Sort By option is selected.
+        Fixed Logs actually logging.
+    """.trimIndent(),
+    Version(5, 4, 1) to """
+        Fixed a issue with the previously used networking engine that a change in the github release headers broke by replacing the engine.
+    """.trimIndent(),
+    Version(5, 5, 0) to """
+        Fixed a issue where after one clicked update all it repeatedly showed it even though all mods were already updating.
+        Updated a lot of dependencies.
+        Added more customization options to the Theme Picker.
+        Added support for the AI Assisted Tag.
+        Reworked the OUTDATED Tag into a proper Version Tag.
+    """.trimIndent(),
 )
 
 fun changelogsAnnotatedString(): AnnotatedString = buildAnnotatedString {

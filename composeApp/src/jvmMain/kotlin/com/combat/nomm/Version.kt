@@ -7,6 +7,7 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlin.math.min
 
 
 @Serializable(with = VersionSerializer::class)
@@ -26,6 +27,18 @@ class Version(vararg components: Int) : Comparable<Version> {
     override fun compareTo(other: Version): Int {
         val maxLength = maxOf(this.parts.size, other.parts.size)
         for (i in 0 until maxLength) {
+            val thisPart = this.parts.getOrElse(i) { 0 }
+            val otherPart = other.parts.getOrElse(i) { 0 }
+            if (thisPart != otherPart) {
+                return thisPart.compareTo(otherPart)
+            }
+        }
+        return 0
+    }
+
+    fun compareTo(other: Version, significant: Int): Int {
+        val maxLength = maxOf(this.parts.size, other.parts.size)
+        for (i in 0 until min(significant, maxLength)) {
             val thisPart = this.parts.getOrElse(i) { 0 }
             val otherPart = other.parts.getOrElse(i) { 0 }
             if (thisPart != otherPart) {

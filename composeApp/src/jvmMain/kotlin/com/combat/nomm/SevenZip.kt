@@ -25,7 +25,7 @@ fun initializeSevenZipNative(): Boolean {
             try {
                 currentInstanceDir.deleteRecursively()
             } catch (e: Exception) {
-                println("[NOMM] Shutdown hook failed to clean natives: ${e.message}")
+                Log.log("Shutdown hook failed to clean natives: ${e.message}")
             }
         })
 

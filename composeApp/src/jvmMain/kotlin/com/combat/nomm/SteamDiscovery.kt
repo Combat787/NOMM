@@ -26,17 +26,17 @@ object SteamDiscovery {
 
     init {
         Runtime.getRuntime().addShutdownHook(Thread({
-            println("[NOMM] JVM shutdown hook: cleaning up Steam worker")
+            Log.log("JVM shutdown hook: cleaning up Steam worker")
             val process = workerProcess
             if (process != null && process.isAlive) {
                 try {
                     ipc?.sendCommand(WorkerCommand.Shutdown)
                 } catch (e: Exception) {
-                    println("[NOMM] Shutdown hook failed to send shutdown command: ${e.message}")
+                    Log.log("Shutdown hook failed to send shutdown command: ${e.message}")
                 }
                 val exited = process.waitFor(3, TimeUnit.SECONDS)
                 if (!exited) {
-                    println("[NOMM] Worker did not exit gracefully during shutdown hook, force killing")
+                    Log.log("Worker did not exit gracefully during shutdown hook, force killing")
                     process.destroyForcibly()
                 }
             }
@@ -60,7 +60,7 @@ object SteamDiscovery {
             if (initResult.value == InitStatus.OK) return InitStatus.OK
             if (running) return InitStatus.NotInitialized
 
-            println("[NOMM] init() starting full initialization")
+            Log.log("init() starting full initialization")
             if (System.getProperty("os.name").lowercase().let { !it.contains("win") && !it.contains("mac") }) {
                 fixSteamSdkPath()
             }
@@ -93,7 +93,7 @@ object SteamDiscovery {
                 shutdownWorker()
             }
 
-            println("[NOMM] Steam init: $status")
+            Log.log("Steam init: $status")
             return status
         }
     }
@@ -138,15 +138,15 @@ object SteamDiscovery {
                     }
 
                     is WorkerEvent.Error -> {
-                        println("[NOMM] Worker error: ${event.message}")
+                        Log.log("Worker error: ${event.message}")
                     }
                 }
             }
         } catch (e: Exception) {
-            println("[NOMM] Event reader error: ${e.message}")
+            Log.log("Event reader error: ${e.message}")
         } finally {
             if (running) {
-                println("[NOMM] Worker process died, resetting state")
+                Log.log("Worker process died, resetting state")
                 running = false
                 initResult.value = InitStatus.NotInitialized
                 isRefreshing.value = false
@@ -164,7 +164,7 @@ object SteamDiscovery {
                 ?: error("steam_appid.txt not found in app resources!")
 
             appIdFile.writeBytes(resourceStream.readBytes())
-            println("[NOMM] Extracted steam_appid.txt to: ${appIdFile.absolutePath}")
+            Log.log("Extracted steam_appid.txt to: ${appIdFile.absolutePath}")
         }
 
         return dataDir
@@ -223,7 +223,7 @@ object SteamDiscovery {
             }
         }
 
-        println("[NOMM] Spawning worker process")
+        Log.log("Spawning worker process")
 
         return ProcessBuilder(commandList).apply {
             directory(workingDir)
@@ -235,20 +235,20 @@ object SteamDiscovery {
     
     suspend fun shutdown() {
         lock.withLock {
-            println("[NOMM] Steam shutdown")
+            Log.log("Steam shutdown")
             shutdownWorker()
         }
     }
 
     fun forceKillWorker() {
-        println("[NOMM] Force killing Steam worker")
+        Log.log("Force killing Steam worker")
         val process = workerProcess
         if (process != null && process.isAlive) {
             process.destroyForcibly()
             try {
                 process.waitFor(2, TimeUnit.SECONDS)
             } catch (e: Exception) {
-                println("[NOMM] Error waiting for force-killed worker: ${e.message}")
+                Log.log("Error waiting for force-killed worker: ${e.message}")
             }
         }
         workerProcess = null
@@ -267,7 +267,7 @@ object SteamDiscovery {
         try {
             ipc?.sendCommand(WorkerCommand.Shutdown)
         } catch (e: Exception) {
-            println("[NOMM] Failed to send shutdown command to worker: ${e.message}")
+            Log.log("Failed to send shutdown command to worker: ${e.message}")
         }
 
         ipc?.close()
@@ -282,15 +282,15 @@ object SteamDiscovery {
                 try {
                     val exited = process.waitFor(5, TimeUnit.SECONDS)
                     if (!exited) {
-                        println("[NOMM] Worker did not exit gracefully, forcing termination")
+                        Log.log("Worker did not exit gracefully, forcing termination")
                         process.destroyForcibly()
                         val forceExited = process.waitFor(2, TimeUnit.SECONDS)
                         if (!forceExited) {
-                            println("[NOMM] Worker still alive after force termination")
+                            Log.log("Worker still alive after force termination")
                         }
                     }
                 } catch (e: Exception) {
-                    println("[NOMM] Error during worker shutdown wait: ${e.message}")
+                    Log.log("Error during worker shutdown wait: ${e.message}")
                     runCatching { process.destroyForcibly() }
                 }
             }

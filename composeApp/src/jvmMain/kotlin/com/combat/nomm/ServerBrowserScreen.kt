@@ -2,6 +2,8 @@ package com.combat.nomm
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,7 +30,18 @@ fun ServerBrowserScreen(
     val serverList by ServerBrowser.servers.collectAsState()
 
     val filteredServers =
-        rememberFilteredServers(serverList, ServerBrowser.searchQuery, ServerBrowser.showUser, ServerBrowser.showDedicated, ServerBrowser.showPve, ServerBrowser.showPvp, ServerBrowser.showModded, ServerBrowser.showVanilla, ServerBrowser.showFavorites, ServerBrowser.sortBy)
+        rememberFilteredServers(
+            serverList,
+            ServerBrowser.searchQuery,
+            ServerBrowser.showUser,
+            ServerBrowser.showDedicated,
+            ServerBrowser.showPve,
+            ServerBrowser.showPvp,
+            ServerBrowser.showModded,
+            ServerBrowser.showVanilla,
+            ServerBrowser.showFavorites,
+            ServerBrowser.sortBy
+        )
 
     LaunchedEffect(Unit) {
         if (ServerBrowser.servers.value.isEmpty()) {
@@ -44,10 +57,9 @@ fun ServerBrowserScreen(
             }
         }
     }
-    
-    
-    val localMods by LocalMods.mods.collectAsState()
-    LaunchedEffect(localMods) {
+
+
+    LaunchedEffect(LocalMods.mods) {
         ServerBrowser.refreshModStatuses()
     }
 
@@ -60,7 +72,11 @@ fun ServerBrowserScreen(
 
             val contentColor = MaterialTheme.colorScheme.onSecondary
             val itemColors =
-                MenuDefaults.itemColors(textColor = contentColor, leadingIconColor = contentColor, trailingIconColor = contentColor)
+                MenuDefaults.itemColors(
+                    textColor = contentColor,
+                    leadingIconColor = contentColor,
+                    trailingIconColor = contentColor
+                )
             Box(contentAlignment = Alignment.TopCenter) {
                 Button(
                     onClick = { sortByExpanded = true },
@@ -71,9 +87,31 @@ fun ServerBrowserScreen(
                     ),
                     shape = MaterialTheme.shapes.small,
                 ) {
-                    Icon(
-                        painterResource(Res.drawable.filter_list_24px), null
-                    )
+                    BadgedBox(
+                        badge = {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.onSecondary,
+                                contentColor = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.offset((4).dp, (-4).dp)
+                            ) {
+                                Icon(
+                                    painterResource(
+                                        when (ServerBrowser.sortBy) {
+                                            SortType.DURATION -> Res.drawable.pace_24px
+                                            SortType.PING -> Res.drawable.network_ping_24px
+                                            SortType.PLAYERS -> Res.drawable.group_24px
+                                        }
+                                    ), null, modifier = Modifier.size(16.dp)
+                                )
+
+                            }
+
+                        }
+                    ) {
+                        Icon(
+                            painterResource(Res.drawable.filter_list_24px), null
+                        )
+                    }
                 }
 
                 DropdownMenu(
@@ -90,7 +128,7 @@ fun ServerBrowserScreen(
                         leadingIcon = { Icon(painterResource(Res.drawable.network_ping_24px), null) },
                         trailingIcon = if (ServerBrowser.sortBy == SortType.PING) {
                             { Icon(painterResource(Res.drawable.check_24px), null) }
-                        }else null,
+                        } else null,
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
@@ -103,7 +141,7 @@ fun ServerBrowserScreen(
                         leadingIcon = { Icon(painterResource(Res.drawable.group_24px), null) },
                         trailingIcon = if (ServerBrowser.sortBy == SortType.PLAYERS) {
                             { Icon(painterResource(Res.drawable.check_24px), null) }
-                        }else null,
+                        } else null,
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
@@ -116,7 +154,7 @@ fun ServerBrowserScreen(
                         leadingIcon = { Icon(painterResource(Res.drawable.pace_24px), null) },
                         trailingIcon = if (ServerBrowser.sortBy == SortType.DURATION) {
                             { Icon(painterResource(Res.drawable.check_24px), null) }
-                        }else null,
+                        } else null,
                         colors = itemColors,
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                     )
@@ -134,9 +172,26 @@ fun ServerBrowserScreen(
                     ),
                     shape = MaterialTheme.shapes.small,
                 ) {
-                    Icon(
-                        painterResource(Res.drawable.filter_alt_24px), contentDescription = "Filters"
-                    )
+                    BadgedBox(
+                        badge = {
+                            if (ServerBrowser.filterCount != 0) {
+                                Badge(
+                                    containerColor = MaterialTheme.colorScheme.onSecondary,
+                                    contentColor = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.offset((4).dp, (-4).dp)
+                                ) {
+                                    Text(
+                                        ServerBrowser.filterCount.toString(),
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painterResource(Res.drawable.filter_alt_24px), contentDescription = "Filters"
+                        )
+                    }
                 }
 
 

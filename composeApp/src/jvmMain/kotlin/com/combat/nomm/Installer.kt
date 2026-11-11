@@ -7,8 +7,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.io.bytestring.hexToByteString
 import net.sf.sevenzipjbinding.SevenZip
 import net.sf.sevenzipjbinding.SevenZipException
 import net.sf.sevenzipjbinding.util.ByteArrayStream
@@ -19,12 +17,11 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 
 object Installer {
-    private val locks = ConcurrentHashMap<String, Mutex>()
+    val locks = ConcurrentHashMap<String, Mutex>()
     val bepinexStatus = MutableStateFlow<TaskState?>(null)
     val installStatuses = MutableStateFlow<Map<String, TaskState>>(emptyMap())
 
@@ -47,8 +44,7 @@ object Installer {
             var stagingDir: File? = null
 
             try {
-                mutex.withLock {
-
+                mutex.withLockOrSkip {
                     val bytes = downloadWithRetry(modId, url, isBepInEx, cancelAction) { downloadedBytes ->
                         if (hash == null || SettingsManager.config.value.ignoreHashMismatch) true else {
                             val expected = hash.removePrefix("sha256:").hexToByteArray().toByteString()
@@ -79,7 +75,7 @@ object Installer {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                println("[NOMM] Install failed for $modId: ${e.message}")
+                Log.log("Install failed for $modId: ${e.message}")
                 runCatching { onError(e) }
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {

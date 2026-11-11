@@ -3,6 +3,7 @@ package com.combat.nomm
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.window.WindowState
 import io.github.vinceglb.filekit.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -14,7 +15,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import androidx.compose.ui.window.WindowState
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -91,14 +91,14 @@ object ServerFavorites {
         if (servers.value.any { it.ip == normalized && it.gamePort == gamePort }) return
         servers.update { it + FavoriteServer(normalized, gamePort, name) }
         scope.launch {
-            runCatching { save() }.onFailure { println("[NOMM] Failed to save favorites: ${it.message}") }
+            runCatching { save() }.onFailure { Log.log("Failed to save favorites: ${it.message}") }
         }
     }
 
     fun remove(ip: String, gamePort: Long) {
         servers.update { it.filterNot { s -> s.ip == ip && s.gamePort == gamePort } }
         scope.launch {
-            runCatching { save() }.onFailure { println("[NOMM] Failed to save favorites: ${it.message}") }
+            runCatching { save() }.onFailure { Log.log("Failed to save favorites: ${it.message}") }
         }
     }
 
@@ -150,7 +150,7 @@ object ServerBrowser {
 
     private fun syncModsToModlist(modlist: List<PackageReference>) {
         val modlistIds = modlist.map { it.id }.toSet()
-        LocalMods.mods.value.forEach { (id, meta) ->
+        LocalMods.mods.forEach { (id, meta) ->
             if (id in LocalMods.protectedIds) return@forEach
             if (modlistIds.contains(id) && meta.enabled != true) {
                 meta.enable()
@@ -161,7 +161,7 @@ object ServerBrowser {
     }
 
     private fun disableAllMods() {
-        LocalMods.mods.value.forEach { (id, meta) ->
+        LocalMods.mods.forEach { (id, meta) ->
             if (id in LocalMods.protectedIds) return@forEach
             if (meta.enabled == true) {
                 meta.disable()
@@ -191,6 +191,21 @@ object ServerBrowser {
     var showModded: Boolean by mutableStateOf(false)
     var showVanilla: Boolean by mutableStateOf(false)
     var showFavorites: Boolean by mutableStateOf(false)
+
+    val filterCount: Int
+        get() {
+            var count = 0
+            if (showUser) count++
+            if (showDedicated) count++
+            if (showPve) count++
+            if (showPvp) count++
+            if (showModded) count++
+            if (showVanilla) count++
+            if (showFavorites) count++
+            return count
+        }
+    
+    
     var sortBy: SortType by mutableStateOf(SortType.PING)
 
     fun load() {
@@ -204,7 +219,7 @@ object ServerBrowser {
             try {
                 val initStatus = SteamDiscovery.init()
                 if (initStatus != InitStatus.OK) {
-                    println("[NOMM] Steam init failed: $initStatus")
+                    Log.log("Steam init failed: $initStatus")
                     loadFavoritesOnly()
                     return@launch
                 }
@@ -414,7 +429,7 @@ object ServerBrowser {
                         json.decodeFromString<List<PackageReference>>(response.bodyAsText())
                     } else null
                 }.getOrElse { e ->
-                    println("[NOMM] Failed to fetch modlist for ${entry.fav.ip}: ${e.message}")
+                    Log.log("Failed to fetch modlist for ${entry.fav.ip}: ${e.message}")
                     null
                 }
             }
@@ -432,11 +447,10 @@ object ServerBrowser {
     }
 
     private fun calculateModStatuses(modlist: List<PackageReference>): List<ServerModStatus> {
-        val localMods = LocalMods.mods.value
         val repoMods = RepoMods.mods.value
 
         return modlist.map { ref ->
-            val local = localMods[ref.id]
+            val local = LocalMods.mods[ref.id]
             val repo = repoMods[ref.id]
 
             when {
@@ -626,7 +640,7 @@ object ServerBrowser {
             // 2. Write connect request for NOSMR plugin
             val configDir = SettingsManager.gameFolder?.let { File(it, "BepInEx/config") }
             if (configDir == null) {
-                println("[NOMM] Cannot write connect request: game folder not set")
+                Log.log("Cannot write connect request: game folder not set")
                 return@launch
             }
             configDir.mkdirs()
@@ -641,7 +655,7 @@ object ServerBrowser {
                     }
                 }
                 val hostAddress = metadata?.get("HostAddress") ?: ""
-                println("[NOMM] Lobby $lobbyId hostAddress=$hostAddress")
+                Log.log("Lobby $lobbyId hostAddress=$hostAddress")
                 buildJsonObject {
                     put("host", hostAddress)
                     put("port", 0)
@@ -652,7 +666,7 @@ object ServerBrowser {
                 val host = entry.fav.ip
                 val port = entry.fav.gamePort
                 val steamId = entry.info?.steamId ?: 0L
-                println("[NOMM] Server $host:$port steamId=$steamId")
+                Log.log("Server $host:$port steamId=$steamId")
                 buildJsonObject {
                     put("host", host)
                     put("port", port)

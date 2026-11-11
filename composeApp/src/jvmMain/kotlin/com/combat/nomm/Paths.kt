@@ -2,6 +2,7 @@ package com.combat.nomm
 
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Path
 
 private const val NUCLEAR_OPTION_APP_ID = "2168680"
 private const val NUCLEAR_OPTION_PROTON_PATH =
@@ -80,7 +81,7 @@ fun getNuclearOptionFolder(gameFolder: File?): File {
     }
 }
 
-internal fun getNuclearOptionFolderFromGameFolder(gameFolder: File): File? {
+fun getNuclearOptionFolderFromGameFolder(gameFolder: File): File? {
     if (!gameFolder.isDirectory || !File(gameFolder, "NuclearOption.exe").isFile) return null
 
     val steamApps = gameFolder.toPath()
@@ -111,7 +112,7 @@ fun validateNuclearOptionGameFolder(gameFolder: File?): String? {
 fun validateWritableDirectory(directory: File): String? {
     if (!directory.isDirectory) return "${directory.absolutePath} is not a directory."
 
-    var probe: java.nio.file.Path? = null
+    var probe: Path? = null
     return try {
         probe = Files.createTempFile(directory.toPath(), ".nomm-write-test-", ".tmp")
         null

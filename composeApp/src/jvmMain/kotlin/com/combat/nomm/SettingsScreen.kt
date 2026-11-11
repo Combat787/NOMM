@@ -196,6 +196,26 @@ fun SettingsScreen() {
                         )
                     }
                 )
+                if (currentConfig.paletteStyle is PaletteStyle.Cmf) {
+                    SettingsSwitchRow(
+                        label = "Use Cmf Theme Secondary Seed Color",
+                        subLabel = "The Cmf Style allows for a Secondary Seed Color.",
+                        checked = currentConfig.useSecondarySeedColor,
+                        onCheckedChange = { newValue ->
+                            SettingsManager.updateConfig(currentConfig.copy(useSecondarySeedColor = newValue))
+                            RepoMods.fetchManifest()
+                        }
+                    )
+                    SettingsColorPicker(
+                        label = "Cmf Theme Secondary Seed Color",
+                        selectedHSV = currentConfig.secondarySeedColorHSVColor,
+                        onHSVSelected = { newHSV ->
+                            SettingsManager.updateConfig(
+                                currentConfig.copy(secondarySeedColorHSVColor = newHSV)
+                            )
+                        }
+                    )
+                }
                 SettingsSwitchRow(
                     label = "Custom Theme",
                     subLabel = "Allows for more customization in the Theme.",
@@ -273,9 +293,7 @@ fun SettingsScreen() {
                 SettingsDropdownRow(
                     label = "Theme Style",
                     subLabel = currentConfig.paletteStyle.getStringName(),
-                    options = listOf(
-                        PaletteStyle.TonalSpot, PaletteStyle.Neutral, PaletteStyle.Vibrant, PaletteStyle.Expressive
-                    ).associateBy { theme -> theme.getStringName() },
+                    options = PaletteStyle.KnownStyles.associateBy { theme -> theme.getStringName() },
                     onOptionSelected = {
                         SettingsManager.updateConfig(currentConfig.copy(paletteStyle = it))
                     })
@@ -295,9 +313,9 @@ fun SettingsScreen() {
                     onCheckedChange = { newHSV ->
                         SettingsManager.updateConfig(currentConfig.copy(nosmr = newHSV))
                         if (SettingsManager.config.value.nosmr) {
-                            LocalMods.mods.value["NOSMR"]?.enable()
+                            LocalMods.mods["NOSMR"]?.enable()
                         } else {
-                            LocalMods.mods.value["NOSMR"]?.disable()
+                            LocalMods.mods["NOSMR"]?.disable()
                         }
                     }
                 )
@@ -363,6 +381,7 @@ private fun PaletteStyle.getStringName(): String = when (this) {
     PaletteStyle.Monochrome -> "Monochrome"
     PaletteStyle.Fidelity -> "Fidelity"
     PaletteStyle.Content -> "Content"
+    is PaletteStyle.Cmf -> "Cmf"
 }
 
 private fun Contrast.getStringName(): String = when (this) {
@@ -859,7 +878,7 @@ fun SettingsTextFieldRow(
 
 private fun openFolder(folder: File) {
     if (!folder.exists()) {
-        println("[NOMM] Folder does not exist: ${folder.absolutePath}")
+        Log.log("Folder does not exist: ${folder.absolutePath}")
         return
     }
     val os = System.getProperty("os.name").lowercase()
@@ -870,6 +889,6 @@ private fun openFolder(folder: File) {
             else -> ProcessBuilder("xdg-open", folder.absolutePath).start()
         }
     } catch (e: Exception) {
-        println("[NOMM] Failed to open folder ${folder.absolutePath}: ${e.message}")
+        Log.log("Failed to open folder ${folder.absolutePath}: ${e.message}")
     }
 }

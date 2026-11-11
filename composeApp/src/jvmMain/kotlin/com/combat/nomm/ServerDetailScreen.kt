@@ -56,8 +56,7 @@ fun ServerDetailScreen(
         }
     }
 
-    val localMods by LocalMods.mods.collectAsState()
-    LaunchedEffect(localMods) {
+    LaunchedEffect(LocalMods.mods) {
         ServerBrowser.refreshModStatuses()
     }
 
@@ -734,10 +733,9 @@ private fun ServerModlistContent(
                 ) {
                     if (mod == null) return@DetailListItemCard
                     val installStatuses by Installer.installStatuses.collectAsState()
-                    val installedMods by LocalMods.mods.collectAsState()
                     val taskState = installStatuses[mod.id]
-                    val modMeta = installedMods[mod.id]
-                    ModActions(taskState, modMeta, mod, 40.dp, 24.dp, version = status.serverVersion, error = error)
+                    val modMeta = LocalMods.mods[mod.id]
+                    ModActions(taskState, modMeta, mod, version = status.serverVersion, error = error)
                 }
             }
             if (identifiedMods.isEmpty()) {

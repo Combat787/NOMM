@@ -23,7 +23,7 @@ fun fixSteamSdkPath() {
     val sdk64Dir = File(home, ".steam/sdk64")
     if (sdk64Dir.exists()) return
 
-    println("[NOMM] ~/.steam/sdk64 not found, searching for sandboxed Steam install...")
+    Log.log("~/.steam/sdk64 not found, searching for sandboxed Steam install...")
 
     val searchPaths = listOf(
         // Flatpak
@@ -39,12 +39,12 @@ fun fixSteamSdkPath() {
     if (found != null) {
         sdk64Dir.parentFile?.mkdirs()
         Files.createSymbolicLink(sdk64Dir.toPath(), found.toPath())
-        println("[NOMM] Created symlink: $sdk64Dir -> $found")
+        Log.log("Created symlink: $sdk64Dir -> $found")
     } else {
-        println("[NOMM] WARNING: Could not find steamclient.so for sandboxed Steam install")
-        println("[NOMM] Server browser will not work until this is fixed.")
-        println("[NOMM] To fix manually, find steamclient.so and symlink it:")
-        println("[NOMM]   find ~ -name steamclient.so 2>/dev/null")
-        println("[NOMM]   ln -s <directory-containing-steamclient.so> ~/.steam/sdk64")
+        Log.log("WARNING: Could not find steamclient.so for sandboxed Steam install")
+        Log.log("Server browser will not work until this is fixed.")
+        Log.log("To fix manually, find steamclient.so and symlink it:")
+        Log.log("  find ~ -name steamclient.so 2>/dev/null")
+        Log.log("  ln -s <directory-containing-steamclient.so> ~/.steam/sdk64")
     }
 }

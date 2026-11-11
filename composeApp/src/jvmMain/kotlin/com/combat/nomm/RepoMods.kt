@@ -32,15 +32,15 @@ object RepoMods {
 
     fun fetchManifest() {
         scope.launch {
-            if (!mutex.tryLock()) {
+            mutex.withLockOrSkip({
                 Log.log("Manifest fetch already in progress, skipping")
                 return@launch
-            }
-            try {
-                isLoading.value = true
-                val useFakeManifest = SettingsManager.config.value.fakeManifest
-                val networkFetched = if (useFakeManifest) null else NetworkClient.fetchManifest()
-                val fetched = networkFetched ?: if (useFakeManifest) {
+            }) {
+                try {
+                    isLoading.value = true
+                    val useFakeManifest = SettingsManager.config.value.fakeManifest
+                    val networkFetched = if (useFakeManifest) null else NetworkClient.fetchManifest()
+                    val fetched = networkFetched ?: if (useFakeManifest) {
                         fetchFakeManifest()
                     } else {
                         SettingsManager.cachedManifest.value.manifest.also { fallback ->
@@ -52,19 +52,21 @@ object RepoMods {
                             }
                         }
                     }
-                if (networkFetched != null || useFakeManifest) {
-                    manifestError.value = null
+                    if (networkFetched != null || useFakeManifest) {
+                        manifestError.value = null
+                    }
+                    val distinctMods = fetched.distinctBy { it.id }.associateBy { it.id }
+                    ModsSearch.filterTags = distinctMods.map { it.value }.commonTagFilters()
+                    mods.value = distinctMods
+                    latestGameVersion.value = fetched.latestGameVersion()
+                    ServerBrowser.modHashLookup = buildModHashLookup(mods.value.map { it.value })
+                } finally {
+                    isLoading.value = false
                 }
-                val distinctMods = fetched.distinctBy { it.id }.associateBy { it.id }
-                ModsSearch.filterTags = distinctMods.map { it.value }.commonTagFilters()
-                mods.value = distinctMods
-                latestGameVersion.value = fetched.latestGameVersion()
-                ServerBrowser.modHashLookup = buildModHashLookup(mods.value.map { it.value })
-            } finally {
-                isLoading.value = false
-                mutex.unlock()
             }
-            val updatable = LocalMods.mods.value.filter { it.value.hasUpdate }
+
+            val updatable =
+                LocalMods.mods.filter { it.value.hasUpdate && (Installer.installStatuses.value[it.value.id] == null) }
                 .mapNotNull { mods.value[it.key] }
             if (updatable.isNotEmpty() && !SettingsManager.config.value.ignoreNewUpdates) {
                 val hasExistingUpdateNotification = SettingsManager.criticalInformation.any {
@@ -152,6 +154,7 @@ object RepoMods {
             wasInstalled = installedMod != null,
             wasEnabled = installedMod?.enabled == true,
         )
+        val installedMod = LocalMods.mods[id]
         if (installedMod != null) {
             val currentVersion = installedMod.artifact?.version
             if (currentVersion != null && currentVersion == targetArtifact.version) return
@@ -181,6 +184,7 @@ object RepoMods {
                 if (enableAfterInstall) {
                     LocalMods.mods.value[id]?.enable()
                 }
+                LocalMods.mods[id]?.enable()
             }
         }
     }
@@ -210,7 +214,7 @@ object RepoMods {
         }
 
 
-        val installedMod = LocalMods.mods.value[id]
+        val installedMod = LocalMods.mods[id]
         val wasEnabled = installedMod?.enabled == true
         installedMod?.disable()
 
@@ -233,7 +237,7 @@ object RepoMods {
 
         Installer.installMod(id, url, dir, hash, onError = {
             if (wasEnabled) {
-                LocalMods.mods.value[id]?.enable()
+                LocalMods.mods[id]?.enable()
             }
             reportNommError("Mod installation failed", it.message ?: "See the terminal for details.")
         }) {

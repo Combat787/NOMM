@@ -11,11 +11,12 @@ object Log {
     fun log(message: String) {
         println("[NOMM] $message")
         runCatching {
-            val logFile = (FileKit.filesDir / "logs" / "nomm.log").file
-            logFile.parentFile?.mkdirs()
+            val logFile = FileKit.filesDir / "logs" / "nomm.log"
+            logFile.parent()?.createDirectories()
+            
             val timestamp = LocalDateTime.now().format(timestampFormat)
             synchronized(lock) {
-                logFile.appendText("[$timestamp] $message\n")
+                logFile.file.appendText("[$timestamp] $message\n")
             }
         }
     }

@@ -150,58 +150,58 @@ private val launching = AtomicBoolean(false)
 
 fun launchNuclearOption(windowState: WindowState) {
     if (!launching.compareAndSet(false, true)) {
-        println("[NOMM] Launch already in progress, skipping")
+        Log.log("Launch already in progress, skipping")
         return
     }
 
     scope.launch(Dispatchers.IO) {
         try {
             if (SteamDiscovery.isGameRunning()) {
-                println("[NOMM] Game is already running, skipping launch")
+                Log.log("Game is already running, skipping launch")
                 return@launch
             }
 
             if (SettingsManager.config.value.steamworks) {
-                println("[NOMM] Shutting down Steam worker before launch")
+                Log.log("Shutting down Steam worker before launch")
                 SteamDiscovery.shutdown()
                 delay(1500L.milliseconds)
             }
 
             val steamUri = "steam://rungameid/2168680"
-            println("[NOMM] Launching game via Steam: $steamUri")
+            Log.log("Launching game via Steam: $steamUri")
             
             val launched = try {
                 launchSteamPlatformSpecific(steamUri)
             } catch (e: Exception) {
-                println("[NOMM] Steam launch failed: ${e.message}")
+                Log.log("Steam launch failed: ${e.message}")
                 false
             }
 
             if (!launched) {
                 val gameFolder = SettingsManager.gameFolder
                 if (gameFolder == null) {
-                    println("[NOMM] Game folder not set, cannot launch")
+                    Log.log("Game folder not set, cannot launch")
                     return@launch
                 }
                 val exeFile = File(gameFolder, "NuclearOption.exe")
                 if (!exeFile.exists()) {
-                    println("[NOMM] Game exe not found, cannot launch")
+                    Log.log("Game exe not found, cannot launch")
                     return@launch
                 }
-                println("[NOMM] Launching NuclearOption.exe directly")
+                Log.log("Launching NuclearOption.exe directly")
                 try {
                     ProcessBuilder(exeFile.absolutePath)
                         .directory(exeFile.parentFile)
                         .start()
                 } catch (e: Exception) {
-                    println("[NOMM] Direct exe launch failed: ${e.message}")
+                    Log.log("Direct exe launch failed: ${e.message}")
                     return@launch
                 }
             }
 
             windowState.isMinimized = true
 
-            println("[NOMM] Waiting for game to start...")
+            Log.log("Waiting for game to start...")
             var gameStarted = false
             val startTime = System.currentTimeMillis()
             while (System.currentTimeMillis() - startTime < 60000) {
@@ -213,20 +213,20 @@ fun launchNuclearOption(windowState: WindowState) {
             }
 
             if (!gameStarted) {
-                println("[NOMM] Game did not start within 60 seconds")
+                Log.log("Game did not start within 60 seconds")
                 windowState.isMinimized = false
                 return@launch
             }
 
-            println("[NOMM] Game started, waiting for exit...")
+            Log.log("Game started, waiting for exit...")
             while (SteamDiscovery.isGameRunning()) {
                 delay(5000L.milliseconds)
             }
-            println("[NOMM] Game exited")
+            Log.log("Game exited")
         } finally {
             launching.set(false)
             if (SettingsManager.config.value.steamworks) {
-                println("[NOMM] Restarting Steam worker")
+                Log.log("Restarting Steam worker")
                 SteamDiscovery.init()
             }
         }
@@ -251,7 +251,7 @@ private fun launchSteamPlatformSpecific(steamUri: String): Boolean {
                 
                 // Try snap Steam first
                 if (File("$home/snap/steam").exists()) {
-                    println("[NOMM] Detected Snap Steam, launching via snap run")
+                    Log.log("Detected Snap Steam, launching via snap run")
                     val exit = ProcessBuilder("bash", "-c", "snap run steam -- $steamUri").start().waitFor()
                     if (exit == 0) return true
                 }
@@ -259,19 +259,19 @@ private fun launchSteamPlatformSpecific(steamUri: String): Boolean {
                 // Try regular steam command
                 val whichSteam = ProcessBuilder("which", "steam").start()
                 if (whichSteam.waitFor() == 0) {
-                    println("[NOMM] Launching via steam command")
+                    Log.log("Launching via steam command")
                     ProcessBuilder("steam", steamUri).start()
                     return true
                 }
                 
                 // Fallback to xdg-open
-                println("[NOMM] Launching via xdg-open")
+                Log.log("Launching via xdg-open")
                 ProcessBuilder("xdg-open", steamUri).start()
                 true
             }
         }
     } catch (e: Exception) {
-        println("[NOMM] Platform-specific Steam launch failed: ${e.message}")
+        Log.log("Platform-specific Steam launch failed: ${e.message}")
         false
     }
 }
