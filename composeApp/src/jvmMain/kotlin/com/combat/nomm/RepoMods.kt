@@ -149,6 +149,11 @@ object RepoMods {
             ?: extension.artifacts.maxByOrNull { it.version }
             ?: return
 
+        val installedMod = LocalMods.mods.value[id]
+        val enableAfterInstall = shouldEnableAfterInstall(
+            wasInstalled = installedMod != null,
+            wasEnabled = installedMod?.enabled == true,
+        )
         val installedMod = LocalMods.mods[id]
         if (installedMod != null) {
             val currentVersion = installedMod.artifact?.version
@@ -176,6 +181,9 @@ object RepoMods {
             runCatching {
                 File(dir, "meta.json").writeText(json.encodeToString(metaData))
                 LocalMods.refresh()
+                if (enableAfterInstall) {
+                    LocalMods.mods.value[id]?.enable()
+                }
                 LocalMods.mods[id]?.enable()
             }
         }
@@ -237,3 +245,8 @@ object RepoMods {
         }
     }
 }
+
+internal fun shouldEnableAfterInstall(
+    wasInstalled: Boolean,
+    wasEnabled: Boolean,
+): Boolean = !wasInstalled || wasEnabled
